@@ -4,7 +4,7 @@ set(configpage_STAT_SRCS
 	projectConfigPage.ui
 )
 
-add_library(kdevdsconfigpage SHARED ${configpage_SRCS} ${configpage_STAT_SRCS})
+add_library(kdevdsconfigpage STATIC ${configpage_SRCS} ${configpage_STAT_SRCS})
 
 ki18n_wrap_ui(configpage_STAT_SRCS
 	projectConfigPage.ui
@@ -29,5 +29,3 @@ target_include_directories(kdevdsconfigpage
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_PRIVATE_INCLUDE_DIR}>
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_INCLUDE_DIR}>
 )
-
-install(TARGETS kdevdsconfigpage EXPORT KDevDragonScriptTargets DESTINATION ${INSTALL_TARGETS_DEFAULT_ARGS})

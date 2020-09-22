@@ -7,7 +7,7 @@ set(codecompletion_STAT_SRCS
 	DSCodeCompletionContext.h
 )
 
-add_library(kdevdscodecompletion SHARED ${codecompletion_SRCS} ${codecompletion_STAT_SRCS})
+add_library(kdevdscodecompletion STATIC ${codecompletion_SRCS} ${codecompletion_STAT_SRCS})
 
 generate_export_header(kdevdscodecompletion EXPORT_MACRO_NAME KDEVDSCODECOMPLETION_EXPORT EXPORT_FILE_NAME codecompletionexport.h)
 target_link_libraries(kdevdscodecompletion LINK_PRIVATE
@@ -28,5 +28,3 @@ target_include_directories(kdevdscodecompletion
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_PRIVATE_INCLUDE_DIR}>
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_INCLUDE_DIR}>
 )
-
-install(TARGETS kdevdscodecompletion EXPORT KDevDragonScriptTargets DESTINATION ${INSTALL_TARGETS_DEFAULT_ARGS})

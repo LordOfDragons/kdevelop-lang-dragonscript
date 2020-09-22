@@ -22,7 +22,7 @@ kdevpgqt_generate(parser_SRCS dsp_ NAMESPACE DragonScript DEBUG_VISITOR TOKEN_TE
 
 FLEX_TARGET(scanner "${CMAKE_CURRENT_SOURCE_DIR}/dragonscript.lex" "${CMAKE_CURRENT_BINARY_DIR}/dsp_lexer.cpp")
 
-add_library(kdevdsparser SHARED ${parser_SRCS} ${parser_STAT_SRCS} ${FLEX_scanner_OUTPUTS})
+add_library(kdevdsparser STATIC ${parser_SRCS} ${parser_STAT_SRCS} ${FLEX_scanner_OUTPUTS})
 # add_dependencies(kdevdsparser fixGeneratedLexer)
 
 generate_export_header(kdevdsparser EXPORT_MACRO_NAME KDEVDSPARSER_EXPORT EXPORT_FILE_NAME parserexport.h)
@@ -48,7 +48,6 @@ target_include_directories(kdevdsparser
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_INCLUDE_DIR}>
 )
 
-install(TARGETS kdevdsparser EXPORT KDevDragonScriptTargets DESTINATION ${INSTALL_TARGETS_DEFAULT_ARGS})
 # install(FILES
 # 	ParseSession.h
 # 	dsp_lexer.h

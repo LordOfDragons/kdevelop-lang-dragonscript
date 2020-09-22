@@ -17,7 +17,7 @@ set(duchain_STAT_SRCS
 	DumpChain.h
 )
 
-add_library(kdevdsduchain SHARED ${duchain_SRCS} ${duchain_STAT_SRCS})
+add_library(kdevdsduchain STATIC ${duchain_SRCS} ${duchain_STAT_SRCS})
 
 generate_export_header(kdevdsduchain EXPORT_MACRO_NAME KDEVDSDUCHAIN_EXPORT EXPORT_FILE_NAME duchainexport.h)
 target_link_libraries(kdevdsduchain LINK_PRIVATE
@@ -36,5 +36,3 @@ target_include_directories(kdevdsduchain
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_PRIVATE_INCLUDE_DIR}>
 	PUBLIC $<INSTALL_INTERFACE:${KDEVDS_INCLUDE_DIR}>
 )
-
-install(TARGETS kdevdsduchain EXPORT KDevDragonScriptTargets DESTINATION ${INSTALL_TARGETS_DEFAULT_ARGS})

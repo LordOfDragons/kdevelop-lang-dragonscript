@@ -22,6 +22,7 @@ target_link_libraries(dragonscriptlanguagesupport
 	kdevdscodecompletion
 	kdevdsconfigpage
 )
+
 #KDev::Util
 
 install(FILES org.kde.kdev-dragonscript.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})

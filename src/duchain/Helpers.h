@@ -49,6 +49,7 @@ private:
 	static KDevelop::AbstractType::Ptr pTypeString;
 	static KDevelop::AbstractType::Ptr pTypeObject;
 	static KDevelop::AbstractType::Ptr pTypeBlock;
+	static KDevelop::AbstractType::Ptr pTypeEnumeration;
 	
 	static DeclarationPointer pTypeDeclByte;
 	static DeclarationPointer pTypeDeclBool;
@@ -57,10 +58,12 @@ private:
 	static DeclarationPointer pTypeDeclString;
 	static DeclarationPointer pTypeDeclObject;
 	static DeclarationPointer pTypeDeclBlock;
+	static DeclarationPointer pTypeDeclEnumeration;
 	
 	static QStringList dataDirs;
 	static QVector<IndexedString> documentationFiles;
 	static IndexedString documentationFileObject;
+	static IndexedString documentationFileEnumeration;
 	static QVector<ReferencedTopDUContext> documentationFileContexts;
 	static bool documentationFileContextsReady;
 	static bool documentationFileContextsParsing;
@@ -129,6 +132,12 @@ public:
 	static KDevelop::AbstractType::Ptr getTypeBlock();
 	
 	/**
+	 * \brief Enumeration type.
+	 * \note DUChainReadLocker required.
+	 */
+	static KDevelop::AbstractType::Ptr getTypeEnumeration();
+	
+	/**
 	 * \brief Byte type.
 	 * \note DUChainReadLocker required.
 	 */
@@ -169,6 +178,12 @@ public:
 	 * \note DUChainReadLocker required.
 	 */
 	static void getTypeBlock( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type );
+	
+	/**
+	 * \brief Enumeration type.
+	 * \note DUChainReadLocker required.
+	 */
+	static void getTypeEnumeration( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type );
 	
 	
 	
@@ -246,6 +261,9 @@ public:
 	
 	/** \brief Get documentation file for Object class. */
 	static IndexedString getDocumentationFileObject();
+	
+	/** \brief Get documentation file for Enumeration class. */
+	static IndexedString getDocumentationFileEnumeration();
 	
 	/**
 	 * \brief Get internal type declaration if loaded.

@@ -36,7 +36,6 @@ private:
 	const ParseSession &pParseSession;
 	QList<bool> pNamespaceContexts;
 	QVector<DUChainPointer<const DUContext>> pPinned;
-	int pEnumNextValue;
 	int pLastModifiers;
 	
 	

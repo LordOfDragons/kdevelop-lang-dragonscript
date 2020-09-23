@@ -11,7 +11,7 @@
  * 
  * This is a native class. It can not be subclassed.
  */
-fixed class Array
+fixed class Enumeration
 	/** \name Management */
 	/*@{*/
 	/** \brief Name of constant. */
@@ -93,7 +93,7 @@ fixed class Array
 	 * 
 	 * Block receives \ref EnumConstant as argument.
 	 */
-	static public func void forEach( Block block )
+	static public func void forEach( Block ablock )
 	end
 	
 	/** \brief Enumeration element with matching name or null if not found. */

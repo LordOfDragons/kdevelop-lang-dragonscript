@@ -555,10 +555,50 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 
 void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitEnumeration";
-// 	openContextEnumeration( node );
-	pEnumNextValue = 0;
-	DefaultVisitor::visitEnumeration( node );
-// 	closeContext();
+	
+	DUChainWriteLocker lock;
+	
+	StructureType::Ptr type( new StructureType() );
+	
+	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>(
+		node->begin->name, node->begin->name, DeclarationFlags::NoFlags );
+	decl->setAlwaysForceDirect( true );
+	
+	eventuallyAssignInternalContext();
+	
+	decl->setKind( KDevelop::Declaration::Type );
+	decl->setComment( getDocumentationForNode( *node ) );
+	decl->clearBaseClasses();
+	decl->setClassType( KDevelop::ClassDeclarationData::Class );
+	decl->setClassModifier( KDevelop::ClassDeclarationData::Final );
+	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
+	
+	// base class. this is only done if this is not the enumeration class from
+	// the documentation being parsed
+	const AbstractType::Ptr typeEnumeration = Helpers::getTypeEnumeration();
+	if( typeEnumeration ){
+		BaseClassInstance base;
+		base.baseClass = typeEnumeration->indexed();
+		base.access = KDevelop::Declaration::Public;
+		decl->addBaseClass( base );
+	}
+	
+	// body
+	type->setDeclaration( decl );
+	decl->setType( type );
+	
+	openType( type );
+	
+	openContextEnumeration( node );
+	decl->setInternalContext( currentContext() );
+	
+	lock.unlock();
+	DeclarationBuilderBase::visitEnumeration( node );
+	lock.lock();
+	
+	closeContext();
+	closeType();
+	closeDeclaration();
 }
 
 void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
@@ -567,22 +607,22 @@ void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
 	ClassMemberDeclaration * const decl = openDeclaration<ClassMemberDeclaration>(
 		node->name, node->name, DeclarationFlags::NoFlags );
 	decl->setAlwaysForceDirect( true );
-	decl->setType( Helpers::getTypeInt() );
 	decl->setKind( KDevelop::Declaration::Instance );
 	decl->setComment( getDocumentationForNode( *node ) );
-	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
-	decl->setStorageSpecifiers( KDevelop::ClassMemberDeclaration::StorageSpecifiers()
-		| KDevelop::ClassMemberDeclaration::StaticSpecifier );
-	// NOTE existing in an older version of KDevelop but now gone... damn it!
-// 		| KDevelop::ClassMemberDeclaration::FinalSpecifier );
+	decl->setAccessPolicy( KDevelop::Declaration::Public );
+	decl->setStorageSpecifiers( KDevelop::ClassMemberDeclaration::StaticSpecifier );
+	
+	// type is the enumeration class
+	const Declaration * const enumDecl = Helpers::classDeclFor(
+		DUChainPointer<const DUContext>( decl->context() ) );
+	if( enumDecl ){
+		decl->setType( enumDecl->abstractType() );
+	}
 	
 	if( node->value ){
 		lock.unlock();
 		visitNode( node->value );
 		lock.lock();
-		
-	}else{
-		pEnumNextValue++;
 	}
 	
 	closeDeclaration();

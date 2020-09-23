@@ -52,6 +52,7 @@ QMap<QString, QStringList> Helpers::cachedIncludeFiles;
 QStringList Helpers::dataDirs;
 QVector<IndexedString> Helpers::documentationFiles;
 IndexedString Helpers::documentationFileObject;
+IndexedString Helpers::documentationFileEnumeration;
 QVector<ReferencedTopDUContext> Helpers::documentationFileContexts;
 bool Helpers::documentationFileContextsReady = false;
 bool Helpers::documentationFileContextsParsing = false;
@@ -68,6 +69,7 @@ KDevelop::AbstractType::Ptr Helpers::pTypeFloat;
 KDevelop::AbstractType::Ptr Helpers::pTypeString;
 KDevelop::AbstractType::Ptr Helpers::pTypeObject;
 KDevelop::AbstractType::Ptr Helpers::pTypeBlock;
+KDevelop::AbstractType::Ptr Helpers::pTypeEnumeration;
 
 DeclarationPointer Helpers::pTypeDeclByte;
 DeclarationPointer Helpers::pTypeDeclBool;
@@ -76,6 +78,7 @@ DeclarationPointer Helpers::pTypeDeclFloat;
 DeclarationPointer Helpers::pTypeDeclString;
 DeclarationPointer Helpers::pTypeDeclObject;
 DeclarationPointer Helpers::pTypeDeclBlock;
+DeclarationPointer Helpers::pTypeDeclEnumeration;
 
 static const Identifier nameConstructor( "new" );
 
@@ -207,6 +210,21 @@ KDevelop::AbstractType::Ptr Helpers::getTypeBlock(){
 	return pTypeBlock;
 }
 
+KDevelop::AbstractType::Ptr Helpers::getTypeEnumeration(){
+	if( ! pTypeDeclEnumeration ){
+		pTypeDeclEnumeration = getInternalTypeDeclaration( "Enumeration" );
+		if( pTypeDeclEnumeration ){
+			pTypeEnumeration = pTypeDeclEnumeration->abstractType();
+		}
+	}
+	
+	if( ! pTypeEnumeration ){
+		pTypeEnumeration = new IntegralType( IntegralType::TypeMixed );
+	}
+	
+	return pTypeEnumeration;
+}
+
 void Helpers::getTypeByte( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
 	type = getTypeByte();
 	declaration = pTypeDeclByte;
@@ -240,6 +258,11 @@ void Helpers::getTypeObject( DeclarationPointer &declaration, KDevelop::Abstract
 void Helpers::getTypeBlock( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
 	type = getTypeBlock();
 	declaration = pTypeDeclBlock;
+}
+
+void Helpers::getTypeEnumeration( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+	type = getTypeEnumeration();
+	declaration = pTypeDeclEnumeration;
 }
 
 
@@ -396,6 +419,17 @@ const KDevelop::AbstractType::Ptr &targetType ){
 		if( castable( top, implement->abstractType(), targetType ) ){
 			return true;
 		}
+	}
+	
+	// check for primitive auto-casting
+	if( equals( top, type, getTypeByte() ) ){
+		return equals( top, targetType, getTypeInt() )
+			|| equals( top, targetType, getTypeFloat() );
+		
+	}else if( equals( top, type, getTypeInt() ) ){
+		// to byte is possible if constant value
+		return equals( top, targetType, getTypeByte() )
+			|| equals( top, targetType, getTypeFloat() );
 	}
 	
 	return false;
@@ -869,15 +903,19 @@ const QVector<IndexedString> &Helpers::getDocumentationFiles(){
 		files.append( "float.ds" );
 		files.append( "Object.ds" );
 		files.append( "Exception.ds" );
+		files.append( "Enumeration.ds" );
 		files.append( "String.ds" );
 		files.append( "Array.ds" );
 		files.append( "Dictionary.ds" );
+		files.append( "Set.ds" );
 		files.append( "Block.ds" );
 		files.append( "Byte.ds" );
 		files.append( "Boolean.ds" );
 		files.append( "Integer.ds" );
 		files.append( "Float.ds" );
 		files.append( "WeakReference.ds" );
+		files.append( "ObjectReference.ds" );
+		files.append( "TimeDate.ds" );
 		files.append( "math/Math.ds" );
 		files.append( "exceptions/EDivisionByZero.ds" );
 		files.append( "exceptions/EInvalidCast.ds" );
@@ -909,6 +947,15 @@ IndexedString Helpers::getDocumentationFileObject(){
 				QString( "kdevdragonscriptsupport/dslangdoc/Object.ds" ) ) );
 	}
 	return documentationFileObject;
+}
+
+IndexedString Helpers::getDocumentationFileEnumeration(){
+	if( documentationFileEnumeration.isEmpty() ){
+		documentationFileEnumeration = IndexedString(
+			QStandardPaths::locate( QStandardPaths::GenericDataLocation,
+				QString( "kdevdragonscriptsupport/dslangdoc/Enumeration.ds" ) ) );
+	}
+	return documentationFileEnumeration;
 }
 
 QVector<ReferencedTopDUContext> Helpers::getDocumentationFileContexts(){

@@ -50,7 +50,7 @@ fixed class int
 	 * \brief Integer is equal to another integer.
 	 * \returns \em true if \em other is of type integer and both are equal.
 	 */
-	public func int equals( Object other )
+	public func bool equals( Object other )
 	end
 	
 	/** \brief Hash code for use as dictionary keys. */

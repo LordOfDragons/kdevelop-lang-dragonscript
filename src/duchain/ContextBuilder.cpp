@@ -47,7 +47,7 @@ void ContextBuilder::setEditor( EditorIntegrator *editor ){
 }
 
 void ContextBuilder::startVisiting( AstNode *node ){
-	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
+// 	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
 	
 	TopDUContext * const top = topContext();
 	
@@ -73,7 +73,7 @@ void ContextBuilder::startVisiting( AstNode *node ){
 	// visit node to start building
 	visitNode( node );
 	closeNamespaceContexts();
-	qDebug() << "KDevDScript: ContextBuilder::startVisiting finished";
+// 	qDebug() << "KDevDScript: ContextBuilder::startVisiting finished";
 }
 
 void ContextBuilder::setContextOnNode( AstNode *node, DUContext *context ){
@@ -115,7 +115,7 @@ ParsingEnvironmentFile *file ){
 
 
 void ContextBuilder::closeNamespaceContexts(){
-	qDebug() << "KDevDScript: ContextBuilder::closeNamespaceContexts" << pNamespaceContextCount;
+// 	qDebug() << "KDevDScript: ContextBuilder::closeNamespaceContexts" << pNamespaceContextCount;
 	while( pNamespaceContextCount > 0 ){
 		pNamespaceContextCount--;
 		closeContext();
@@ -123,10 +123,10 @@ void ContextBuilder::closeNamespaceContexts(){
 }
 
 void ContextBuilder::openContextClass( ClassAst *node ){
-	if( ! node->end ){
-		qDebug() << "ContextBuilder::openContextClass: node->end is NULL in" << document()
-			<< "at" << pEditor->findPosition( *node->begin );
-	}
+// 	if( ! node->end ){
+// 		qDebug() << "ContextBuilder::openContextClass: node->end is NULL in" << document()
+// 			<< "at" << pEditor->findPosition( *node->begin );
+// 	}
 	// context starts at the end of the declaration
 	const CursorInRevision cursorBegin( pEditor->findPosition( *node->begin, EditorIntegrator::BackEdge ) );
 	const CursorInRevision cursorEnd( node->end
@@ -144,10 +144,10 @@ void ContextBuilder::openContextClass( ClassAst *node ){
 }
 
 void ContextBuilder::openContextInterface( InterfaceAst *node ){
-	if( ! node->end ){
-		qDebug() << "ContextBuilder::openContextInterface: node->end is NULL in" << document()
-			<< "at" << pEditor->findPosition( *node->begin );
-	}
+// 	if( ! node->end ){
+// 		qDebug() << "ContextBuilder::openContextInterface: node->end is NULL in" << document()
+// 			<< "at" << pEditor->findPosition( *node->begin );
+// 	}
 	// context starts at the end of the declaration
 	const CursorInRevision cursorBegin( pEditor->findPosition( *node->begin, EditorIntegrator::BackEdge ) );
 	const CursorInRevision cursorEnd( node->end
@@ -162,10 +162,10 @@ void ContextBuilder::openContextInterface( InterfaceAst *node ){
 }
 
 void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
-	if( ! node->end ){
-		qDebug() << "ContextBuilder::openContextEnumeration: node->end is NULL in" << document()
-			<< "at" << pEditor->findPosition( *node->begin );
-	}
+// 	if( ! node->end ){
+// 		qDebug() << "ContextBuilder::openContextEnumeration: node->end is NULL in" << document()
+// 			<< "at" << pEditor->findPosition( *node->begin );
+// 	}
 	// context starts at the end of the declaration
 	const CursorInRevision cursorBegin( pEditor->findPosition( *node->begin, EditorIntegrator::BackEdge ) );
 	const CursorInRevision cursorEnd( node->end
@@ -180,10 +180,10 @@ void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
 }
 
 void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
-	if( ! node->end ){
-		qDebug() << "ContextBuilder::openContextClassFunction: node->end is NULL in" << document()
-			<< "at" << pEditor->findPosition( *node->begin );
-	}
+// 	if( ! node->end ){
+// 		qDebug() << "ContextBuilder::openContextClassFunction: node->end is NULL in" << document()
+// 			<< "at" << pEditor->findPosition( *node->begin );
+// 	}
 	// context starts at the end of the declaration
 	const CursorInRevision cursorBegin( node->begin->name
 		? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )

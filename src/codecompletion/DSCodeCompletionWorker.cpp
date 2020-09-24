@@ -32,7 +32,7 @@ const QString& contextText, const QString& followingText, const CursorInRevision
 		return nullptr;
 	}
 	
-	return new DSCodeCompletionContext( *this, context, contextText, followingText, position, 0 );
+	return new DSCodeCompletionContext( context, contextText, followingText, position, 0 );
 }
 
 void DSCodeCompletionWorker::updateContextRange( Range& contextRange, View* view,

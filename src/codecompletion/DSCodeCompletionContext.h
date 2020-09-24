@@ -5,6 +5,9 @@
 #include <language/duchain/duchainpointer.h>
 
 #include "codecompletionexport.h"
+#include "dsp_tokenstream.h"
+
+#include <QStack>
 
 using KDevelop::CodeCompletionContext;
 using KDevelop::CompletionTreeItemPointer;
@@ -17,22 +20,72 @@ using KTextEditor::View;
 
 namespace DragonScript {
 
-class DSCodeCompletionWorker;
-
+/**
+ * \brief Code completion context.
+ */
 class KDEVDSCODECOMPLETION_EXPORT DSCodeCompletionContext : public CodeCompletionContext{
 public:
-	DSCodeCompletionContext( const DSCodeCompletionWorker &worker, DUContextPointer context,
-		const QString& contextText, const QString& followingText,
-		const CursorInRevision& position, int depth );
+	/** \brief Create code completion context. */
+	DSCodeCompletionContext( DUContextPointer context, const QString& contextText,
+		const QString& followingText, const CursorInRevision& position, int depth );
 	
+	struct ExpressionStackEntry{
+		int startPosition;
+		int operatorStart;
+		int operatorEnd;
+		int commas;
+	};
+	
+	/**
+	 * \brief Extract the last full expression from the string.
+	 * 
+	 * Usually the last expression is the last line in the text but can be the last N lines
+	 * in the text if line splicing is used.
+	 */
+	QString extractLastExpression( const QString &string ) const;
+	
+	/**
+	 * \brief Request completion items.
+	 */
 	QList<CompletionTreeItemPointer> completionItems( bool &abort, bool fullCompletion = true ) override;
+	
+	/**
+	 * \brief Returns true if text ends inside a string or comment.
+	 */
+	bool textEndsInsideCommentOrString( const QString &text ) const;
+	
+	/**
+	 * \brief Tokenize text into token stream.
+	 */
+	void tokenizeText( const QString &expression );
+	
+	/**
+	 * \brief Log content token stream to debug output.
+	 */
+	void debugLogTokenStream( const QString &prefix = "DSCodeCompletionContext.tokenStream:" ) const;
+	
+	/**
+	 * \brief Add completion items for code bodies.
+	 */
+	void addCompletionCodeBody( QList<CompletionTreeItemPointer> &items );
+	
+	
+	
+	bool endsWithDot( const QString &string ) const;
+	KDevelop::AbstractType::Ptr typeToMatch() const;
+	QStack<ExpressionStackEntry> expressionStack( const QString& expression ) const;
 	
 	
 	
 private:
-	const DSCodeCompletionWorker &pWorker;
-	const QString pContextText;
-	const CursorInRevision pPosition;
+	// the full text leading up to the last separation token ("." for example)
+	const QString pFullText;
+	
+	// the text following after the last separation token (partial member name for example)
+	const QString pFollowingText;
+	
+	TokenStream pTokenStream;
+	QByteArray pTokenStreamText;
 };
 
 }

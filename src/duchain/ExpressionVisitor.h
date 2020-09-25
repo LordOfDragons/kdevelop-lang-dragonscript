@@ -44,13 +44,10 @@ class KDEVDSDUCHAIN_EXPORT ExpressionVisitor : public DefaultVisitor,
 public DynamicLanguageExpressionVisitor
 {
 private:
-	const EditorIntegrator &pEditorIntegrator;
+	const EditorIntegrator &pEditor;
 	
 	/** \brief Void type is allowed. */
 	bool pAllowVoid = false;
-	
-	/** \brief tells whether the returned declaration is an alias. */
-	bool m_isAlias = false;
 	
 	/** \brief used by code completion to disable range checks on declaration searches. */
 	bool m_forceGlobalSearching = false;
@@ -69,8 +66,8 @@ public:
 	
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;
-	
-	inline bool isAlias() const { return m_isAlias; }
+	void visitExpressionMember( ExpressionMemberAst *node ) override;
+	void visitExpressionBlock( ExpressionBlockAst *node ) override;
 	
 	/** \brief Void type is allowed. */
 	inline bool getAllowVoid() const{ return pAllowVoid; }
@@ -94,20 +91,39 @@ public:
 		return m_unknownNames;
 	}
 	
+	/** \brief Last declaration is alias type. */
+	bool isLastAlias() const;
+	
+	/** \brief Context matching last type found or nullptr. */
+	const DUContext *lastContext() const;
+	
 	
 	
 protected:
 	/** \brief Report semantic hint if reporting is enabled. */
 	void reportSemanticHint( const RangeInRevision &range, const QString &hint );
 	
+	/** \brief Simplify common calls. */
+	void encounterDecl( Declaration &decl );
+	void encounterObject();
+	void encounterBool();
+	void encounterByte();
+	void encounterInt();
+	void encounterFloat();
+	void encounterString();
+	void encounterBlock();
+	
+	/**
+	 * \brief Check function call.
+	 * \note Does use DUChainWriteLocker internally.
+	 */
+	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> ctx,
+		const QVector<KDevelop::AbstractType::Ptr> &signature );
+	
 	
 	
 private:
 	void addUnknownName( const QString &name );
-	
-	void setLastIsAlias(bool alias) {
-		m_isAlias = alias;
-	}
 };
 
 }

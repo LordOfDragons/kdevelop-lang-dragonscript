@@ -35,6 +35,8 @@ public:
 	
 	QString filterString( View *view, const Range &range, const Cursor &position ) override;
 	
+	inline const QUrl& document() const{ return pDocument; }
+	
 private:
 	QUrl pDocument;
 };

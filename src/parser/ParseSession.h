@@ -46,6 +46,8 @@ public:
 	
 	QList<ProblemPointer> problems();
 	
+	void prepareCompletion( Parser &parser );
+	
 	/// @TODO implement this
 	void mapAstUse( AstNode *node, const SimpleUse &use ){
 		Q_UNUSED(node);

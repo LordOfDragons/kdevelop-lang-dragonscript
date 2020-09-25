@@ -124,4 +124,20 @@ QList<ProblemPointer> ParseSession::problems(){
 	return pProblems;
 }
 
+
+
+void ParseSession::prepareCompletion( Parser &parser ){
+	if( pTokenStream ){
+		delete pTokenStream;
+		pTokenStream = nullptr;
+	}
+	pTokenStream = new TokenStream;
+	
+	parser.setContents( &pContents );
+	parser.setTokenStream( pTokenStream );
+	parser.setMemoryPool( pPool );
+	parser.setDebug( pDebug );
+	parser.setCurrentDocument( pCurrentDocument );
+}
+
 }

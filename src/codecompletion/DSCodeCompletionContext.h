@@ -27,7 +27,8 @@ class KDEVDSCODECOMPLETION_EXPORT DSCodeCompletionContext : public CodeCompletio
 public:
 	/** \brief Create code completion context. */
 	DSCodeCompletionContext( DUContextPointer context, const QString& contextText,
-		const QString& followingText, const CursorInRevision& position, int depth );
+		const QString& followingText, const CursorInRevision& position, int depth,
+		const QUrl &document );
 	
 	struct ExpressionStackEntry{
 		int startPosition;
@@ -60,6 +61,11 @@ public:
 	void tokenizeText( const QString &expression );
 	
 	/**
+	 * \brief Copy range of tokens from one token stream to the other.
+	 */
+	static void copyTokens( const TokenStream &in, TokenStream &out, int start, int end = -1 );
+	
+	/**
 	 * \brief Log content token stream to debug output.
 	 */
 	void debugLogTokenStream( const QString &prefix = "DSCodeCompletionContext.tokenStream:" ) const;
@@ -78,6 +84,8 @@ public:
 	
 	
 private:
+	QUrl pDocument;
+	
 	// the full text leading up to the last separation token ("." for example)
 	const QString pFullText;
 	

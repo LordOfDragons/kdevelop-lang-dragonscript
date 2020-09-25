@@ -36,6 +36,7 @@ public:
 	
 private:
 	DSCodeCompletionModel &pModel;
+	QUrl pDocument;
 };
 
 }

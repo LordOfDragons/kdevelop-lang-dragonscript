@@ -7,6 +7,7 @@
 
 #include "dsp_ast.h"
 #include "dsp_tokenstream.h"
+#include "dsp_debugvisitor.h"
 
 #include "DSCodeCompletionContext.h"
 #include "DSCodeCompletionModel.h"
@@ -23,6 +24,7 @@ using KDevelop::DUContext;
 using KDevelop::DUContextPointer;
 using KDevelop::DUChainReadLocker;
 using KDevelop::Use;
+using KDevelop::StructureType;
 
 using KTextEditor::Range;
 using KTextEditor::View;
@@ -33,8 +35,9 @@ namespace DragonScript {
 
 DSCodeCompletionContext::DSCodeCompletionContext( DUContextPointer context,
 	const QString& contextText, const QString& followingText,
-	const CursorInRevision& position, int depth ) :
+	const CursorInRevision& position, int depth, const QUrl &document ) :
 CodeCompletionContext( context, extractLastExpression( contextText ), position, depth ),
+pDocument( document ),
 pFullText( contextText ),
 pFollowingText( followingText )
 {
@@ -76,6 +79,97 @@ bool &abort, bool fullCompletion ){
 	// below to use the token stream to find the right completions to show
 	tokenizeText( m_text );
 	debugLogTokenStream();
+	
+	// test parsing
+	{
+	if( pTokenStream.size() == 0 || pTokenStream.back().kind != Parser::Token_PERIOD ){
+		qDebug() << "not doing completion";
+		return items;
+	}
+	
+	const QByteArray ptext( m_text.toUtf8() );
+	ParseSession session( IndexedString( pDocument ), ptext );
+	EditorIntegrator editor( session );
+	Parser parser;
+	
+	session.prepareCompletion( parser );
+	
+	// copy tokens except the final period
+	copyTokens( pTokenStream, *session.tokenStream(), 0, -2 );
+	
+	// try parsing the token stream into an expression. this usually fails since the expression
+	// is incomplete and can not be fully parsed. if the parsing fails remove one token from
+	// the beginning and try again. at some point the expression will be short enough to be
+	// valid. this should be the expression we have to evaluate to obtain the object type
+	// to use for completion
+	ExpressionAst *ast = nullptr;
+	int i;
+	for( i=0; i<session.tokenStream()->size(); i++ ){
+		parser.rewind( i );
+		if( parser.parseExpression( &ast ) && session.tokenStream()->index() == session.tokenStream()->size() ){
+			break;
+		}
+		ast = nullptr;
+	}
+	
+	if( ast ){
+		DebugVisitor( session.tokenStream(), QString::fromLatin1( ptext ) ).visitNode( ast );
+		
+		ExpressionVisitor exprvisitor( editor, context.data() );
+		exprvisitor.visitExpression( ast );
+		
+		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+			qDebug() << "exprVisitor lastType=" << exprvisitor.lastType()->toString()
+				<< "lastDecl=" << ( exprvisitor.lastDeclaration().data() ? exprvisitor.lastDeclaration().data()->toString() : "-" );
+		}
+		/*
+		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+			const StructureType::Ptr type = exprvisitor.lastType().cast<StructureType>();
+			qDebug() << "found expression type" << type->toString();
+		}
+		*/
+		
+
+	}
+	
+#if 0
+	KDevPG::MemoryPool pool;
+	TokenStream pts;
+	Parser parser;
+	parser.setContents( &ptext );
+	parser.setTokenStream( &pts );
+	parser.setMemoryPool( &pool );
+	parser.setDebug( true );
+	parser.tokenize();
+	
+	/*
+	StatementAst *astSta = nullptr;
+	parser.parseStatement( &astSta );
+	if( astSta ){
+		DebugAst( pts, ptext ).visitStatement( astSta );
+	}
+	*/
+	
+	ExpressionInlineIfElseAst *ast = nullptr;
+	parser.parseExpressionInlineIfElse( &ast );
+	if( ast ){
+		DebugVisitor( &pts, QString::fromLatin1( ptext ) ).visitNode( ast );
+		
+		ExpressionVisitor exprvisitor( *editor(), currentContext() );
+		exprvisitor.visitNode( node->begin->extends );
+		
+		if( exprvisitor.lastType()
+		&& exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+			const StructureType::Ptr baseType = exprvisitor.lastType().cast<StructureType>();
+			BaseClassInstance base;
+			base.baseClass = baseType->indexed();
+			base.access = KDevelop::Declaration::Public;
+			decl->addBaseClass( base );
+		}
+
+	}
+#endif
+	}
 	
 	// depending on the context different completions are reasonable
 	switch( context->type() ){
@@ -204,6 +298,18 @@ void DSCodeCompletionContext::tokenizeText( const QString &expression ){
 		default:
 			pTokenStream.push() = token;
 		}
+	}
+}
+
+void DSCodeCompletionContext::copyTokens( const TokenStream &in, TokenStream &out, int start, int end ){
+	if( end < 0 ){
+		end += in.size();
+	}
+	
+	out.clear();
+	int i;
+	for( i=start; i<=end; i++ ){
+		out.push( in.at( i ) );
 	}
 }
 

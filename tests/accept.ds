@@ -53,8 +53,8 @@ class ClassExtendImplement extends ClassExtend implements ActionListener, Collid
 	public func new( String arg1, bool arg2 )
 	end
 	
-	public func void callMe( int value, Block ablock )
-		ablock.run( 0 )
+	public func int callMe( int value, Block ablock )
+		return ablock.run( 0 )
 	end
 	
 	protected func int pFunc()
@@ -125,14 +125,14 @@ public class OuterClass extends ClassExtendImplement
 	 * \param value A value parameter.
 	 * \param ablock A block with some parameters.
 	 */
-	public func void callMe( int value, Block ablock )
+	public func int callMe( int value, Block ablock )
 		select value
 		case 0, 1, 2
-			ablock.run( value )
+			return ablock.run( value )
 		case 10
-			ablock.run( value * 10 )
+			return ablock.run( value * 10 )
 		else
-			super.callMe( value, ablock )
+			return super.callMe( value, ablock )
 		end
 	end
 	

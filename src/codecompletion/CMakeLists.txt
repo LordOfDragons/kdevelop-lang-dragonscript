@@ -5,6 +5,8 @@ set(codecompletion_STAT_SRCS
 	DSCodeCompletionWorker.h
 	DSCodeCompletionContext.cpp
 	DSCodeCompletionContext.h
+	DSCodeCompletionCodeBody.cpp
+	DSCodeCompletionCodeBody.h
 )
 
 add_library(kdevdscodecompletion STATIC ${codecompletion_SRCS} ${codecompletion_STAT_SRCS})

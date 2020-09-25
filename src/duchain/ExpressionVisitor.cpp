@@ -200,19 +200,13 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 	}
 	
 	if( node->funcCall != -1 ){
-		QVector<KDevelop::AbstractType::Ptr> signature;
+		QVector<AbstractType::Ptr> signature;
 		
 		if( node->argumentsSequence ){
 			const KDevPG::ListNode<ExpressionAst*> *iter = node->argumentsSequence->front();
 			const KDevPG::ListNode<ExpressionAst*> *end = iter;
 			do{
-				m_lastType = nullptr; // important or lastContext() calls will fail
-				m_lastDeclaration = nullptr; // important or lastContext() calls will fail
-				
-				visitNode( iter->element );
-				
-				if( m_lastType == unknownType() ){
-					encounterUnknown();
+				if( ! clearVisitNode( iter->element ) ){
 					return;
 				}
 				signature.append( m_lastType );
@@ -226,7 +220,9 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		const QString name( pEditor.tokenText( *node->name ) );
 		QVector<Declaration*> declarations;
 		if( ctx ){
-			declarations = Helpers::declarationsForName( name, CursorInRevision::invalid()/*pEditor.findPosition( *node )*/, ctx );
+			//declarations = Helpers::declarationsForName( name, CursorInRevision::invalid(), ctx );
+			declarations = Helpers::declarationsForName( name,
+				pEditor.findPosition( *node, EditorIntegrator::BackEdge ), ctx );
 		}
 		
 		if( declarations.isEmpty() ){
@@ -237,7 +233,9 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 				if( classDecl ){
 					ctx = classDecl->internalContext();
 					if( ctx ){
-						declarations = Helpers::declarationsForName( name, CursorInRevision::invalid()/*pEditor.findPosition( *node )*/, ctx );
+						//declarations = Helpers::declarationsForName( name, CursorInRevision::invalid(), ctx );
+						declarations = Helpers::declarationsForName( name,
+							pEditor.findPosition( *node, EditorIntegrator::BackEdge ), ctx );
 					}
 				}
 			}
@@ -252,8 +250,212 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 	}
 }
 
+void ExpressionVisitor::visitExpressionAddition( ExpressionAdditionAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->moreSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionAdditionMoreAst*> *iter = node->moreSequence->front();
+	const KDevPG::ListNode<ExpressionAdditionMoreAst*> *end = iter;
+	do{
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
+			return;
+		}
+		
+		checkFunctionCall( iter->element->op, ctx, m_lastType );
+		iter = iter->next;
+	}while( iter != end );
+}
+
 void ExpressionVisitor::visitExpressionBlock( ExpressionBlockAst* ){
 	encounterBlock();
+}
+
+void ExpressionVisitor::visitExpressionAssign( ExpressionAssignAst *node ){
+	clearVisitNode( node->left );
+	// assign is the type of the left node. this is the same code used for fall-through
+}
+
+void ExpressionVisitor::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->moreSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionBitOperationMoreAst*> *iter = node->moreSequence->front();
+	const KDevPG::ListNode<ExpressionBitOperationMoreAst*> *end = iter;
+	do{
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
+			return;
+		}
+		
+		checkFunctionCall( iter->element->op, ctx, m_lastType );
+		iter = iter->next;
+	}while( iter != end );
+}
+
+void ExpressionVisitor::visitExpressionCompare( ExpressionCompareAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->moreSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionCompareMoreAst*> *iter = node->moreSequence->front();
+	const KDevPG::ListNode<ExpressionCompareMoreAst*> *end = iter;
+	do{
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
+			return;
+		}
+		
+		checkFunctionCall( iter->element->op, ctx, m_lastType );
+		iter = iter->next;
+	}while( iter != end );
+}
+
+void ExpressionVisitor::visitExpressionLogic( ExpressionLogicAst *node ){
+	if( node->moreSequence ){
+		encounterBool(); // always bool
+		
+	}else{
+		clearVisitNode( node->left ); // fall-through
+	}
+}
+
+void ExpressionVisitor::visitExpressionMultiply( ExpressionMultiplyAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->moreSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionMultiplyMoreAst*> *iter = node->moreSequence->front();
+	const KDevPG::ListNode<ExpressionMultiplyMoreAst*> *end = iter;
+	do{
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
+			return;
+		}
+		
+		checkFunctionCall( iter->element->op, ctx, m_lastType );
+		iter = iter->next;
+	}while( iter != end );
+}
+
+void ExpressionVisitor::visitExpressionPostfix( ExpressionPostfixAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->opSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionPostfixOpAst*> *iter = node->opSequence->front();
+	const KDevPG::ListNode<ExpressionPostfixOpAst*> *end = iter;
+	do{
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx ){
+			return;
+		}
+		
+		checkFunctionCall( iter->element, ctx, QVector<KDevelop::AbstractType::Ptr>() );
+		iter = iter->next;
+	}while( iter != end );
+}
+
+void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
+	if( ! clearVisitNode( node->left ) || ! node->moreSequence /*fall through*/ ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ExpressionSpecialMoreAst*> *iter = node->moreSequence->front();
+	const KDevPG::ListNode<ExpressionSpecialMoreAst*> *end = iter;
+	
+	do{
+		if( ! iter->element->op || iter->element->op->op == -1 ){
+			encounterUnknown(); // should never happen
+			return;
+		}
+		
+		switch( pEditor.session().tokenStream()->at( iter->element->op->op ).kind ){
+		case TokenType::Token_CAST:{
+			DUChainPointer<const DUContext> ctx( lastContext() );
+			if( ! ctx || ! clearVisitNode( iter->element->type ) ){
+				return;
+			}
+			}break;
+			
+		case TokenType::Token_CASTABLE:
+		case TokenType::Token_TYPEOF:
+			encounterBool();
+			break;
+			
+		default:
+			encounterUnknown(); // should never happen
+			return;
+		}
+		
+		iter = iter->next;
+	}while( iter != end );
+}
+
+void ExpressionVisitor::visitExpressionUnary( ExpressionUnaryAst *node ){
+	if( ! clearVisitNode( node->right ) || ! node->opSequence /*fall through*/ ){
+		return;
+	}
+	
+	QVector<ExpressionUnaryOpAst*> sequence;
+	const KDevPG::ListNode<ExpressionUnaryOpAst*> *iter = node->opSequence->front();
+	const KDevPG::ListNode<ExpressionUnaryOpAst*> *end = iter;
+	do{
+		sequence.push_front( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	foreach( ExpressionUnaryOpAst *each, sequence ){
+		DUChainPointer<const DUContext> ctx( lastContext() );
+		if( ! ctx ){
+			return;
+		}
+		checkFunctionCall( each, ctx, QVector<KDevelop::AbstractType::Ptr>() );
+	}
+}
+
+void ExpressionVisitor::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
+	if( node->more ){
+		// if-case becomes expression type so condition and else-case is ignored
+		clearVisitNode( node->more->expressionIf );
+		
+	}else{ /*fall through*/
+		clearVisitNode( node->condition );
+	}
+}
+
+void ExpressionVisitor::visitStatementFor( StatementForAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementIf( StatementIfAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementReturn( StatementReturnAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementSelect( StatementSelectAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementThrow( StatementThrowAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementTry( StatementTryAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementVariableDefinitions( StatementVariableDefinitionsAst* ){
+	encounterUnknown(); // void
+}
+
+void ExpressionVisitor::visitStatementWhile( StatementWhileAst* ){
+	encounterUnknown(); // void
 }
 
 void ExpressionVisitor::encounterDecl( Declaration &decl ){
@@ -261,59 +463,68 @@ void ExpressionVisitor::encounterDecl( Declaration &decl ){
 }
 
 void ExpressionVisitor::encounterObject(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeObject( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterBool(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeBool( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterByte(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeByte( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterInt(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeInt( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterFloat(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeFloat( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterString(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeString( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
 void ExpressionVisitor::encounterBlock(){
-	KDevelop::AbstractType::Ptr typePtr;
+	AbstractType::Ptr typePtr;
 	DeclarationPointer declPtr;
 	Helpers::getTypeBlock( declPtr, typePtr );
 	encounter( typePtr, declPtr );
 }
 
+void ExpressionVisitor::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
+const AbstractType::Ptr &argument ){
+	QVector<AbstractType::Ptr> signature;
+	signature.append( argument );
+	checkFunctionCall( node, context, signature );
+}
+
 void ExpressionVisitor::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> ctx,
-const QVector<KDevelop::AbstractType::Ptr> &signature ){
+const QVector<AbstractType::Ptr> &signature ){
 	QVector<Declaration*> declarations;
 	if( ctx ){
-		declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid()/*pEditor.findPosition( *node )*/, ctx );
+		//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
+		declarations = Helpers::declarationsForName( pEditor.tokenText( *node ),
+			pEditor.findPosition( *node, EditorIntegrator::BackEdge ), ctx );
 	}
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();
@@ -340,6 +551,21 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 	}
 	
 	encounterUnknown();
+}
+
+bool ExpressionVisitor::clearVisitNode( AstNode *node ){
+	m_lastType = nullptr; // important or lastContext() calls will fail
+	m_lastDeclaration = nullptr; // important or lastContext() calls will fail
+	
+	if( node ){
+		visitNode( node );
+		if( m_lastType != unknownType() ){
+			return true;
+		}
+	}
+	
+	encounterUnknown();
+	return false;
 }
 
 

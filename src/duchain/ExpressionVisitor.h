@@ -28,6 +28,7 @@ using KDevelop::FunctionDeclaration;
 using KDevelop::DynamicLanguageExpressionVisitor;
 using KDevelop::TypePtr;
 using KDevelop::QualifiedIdentifier;
+using KDevelop::AbstractType;
 
 namespace DragonScript {
 
@@ -68,6 +69,24 @@ public:
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;
 	void visitExpressionMember( ExpressionMemberAst *node ) override;
 	void visitExpressionBlock( ExpressionBlockAst *node ) override;
+	void visitExpressionAddition( ExpressionAdditionAst *node ) override;
+	void visitExpressionAssign( ExpressionAssignAst *node ) override;
+	void visitExpressionBitOperation( ExpressionBitOperationAst *node ) override;
+	void visitExpressionCompare( ExpressionCompareAst *node ) override;
+	void visitExpressionLogic( ExpressionLogicAst *node ) override;
+	void visitExpressionMultiply( ExpressionMultiplyAst *node ) override;
+	void visitExpressionPostfix( ExpressionPostfixAst *node ) override;
+	void visitExpressionSpecial( ExpressionSpecialAst *node ) override;
+	void visitExpressionUnary( ExpressionUnaryAst *node ) override;
+	void visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ) override;
+	void visitStatementFor(StatementForAst *node) override;
+	void visitStatementIf(StatementIfAst *node) override;
+	void visitStatementReturn(StatementReturnAst *node) override;
+	void visitStatementSelect(StatementSelectAst *node) override;
+	void visitStatementThrow(StatementThrowAst *node) override;
+	void visitStatementTry(StatementTryAst *node) override;
+	void visitStatementVariableDefinitions(StatementVariableDefinitionsAst *node) override;
+	void visitStatementWhile(StatementWhileAst *node) override;
 	
 	/** \brief Void type is allowed. */
 	inline bool getAllowVoid() const{ return pAllowVoid; }
@@ -113,12 +132,20 @@ protected:
 	void encounterString();
 	void encounterBlock();
 	
-	/**
-	 * \brief Check function call.
-	 * \note Does use DUChainWriteLocker internally.
-	 */
+	/** \brief Check function call. */
+	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
+		const AbstractType::Ptr &argument );
+	
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> ctx,
-		const QVector<KDevelop::AbstractType::Ptr> &signature );
+		const QVector<AbstractType::Ptr> &signature );
+	
+	/**
+	 * \brief Clear last type and declaration the visit node.
+	 * 
+	 * If node is not nullptr and after visiting the node a valid type is present true
+	 * is returned otherwise calls encounterUnknown() and return false.
+	 */
+	bool clearVisitNode( AstNode *node );
 	
 	
 	

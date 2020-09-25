@@ -9,6 +9,7 @@
 #include "dsp_tokenstream.h"
 #include "dsp_debugvisitor.h"
 
+#include "DSCodeCompletionCodeBody.h"
 #include "DSCodeCompletionContext.h"
 #include "DSCodeCompletionModel.h"
 #include "ExpressionVisitor.h"
@@ -36,13 +37,15 @@ namespace DragonScript {
 DSCodeCompletionContext::DSCodeCompletionContext( DUContextPointer context,
 	const QString& contextText, const QString& followingText,
 	const CursorInRevision& position, int depth, const QUrl &document ) :
-CodeCompletionContext( context, extractLastExpression( contextText ), position, depth ),
+CodeCompletionContext( context, contextText /*extractLastExpression( contextText )*/, position, depth ),
+	// extractLastExpression() can not be used because block blocks need to be parsed
+	// and these spawn multiple non-spliced lines
 pDocument( document ),
 pFullText( contextText ),
 pFollowingText( followingText )
 {
-	qDebug() << "KDevDScript: DSCodeCompletionContext():" << pFullText << m_position
-		<< pFollowingText << m_duContext->range();
+// 	qDebug() << "KDevDScript: DSCodeCompletionContext():" << pFullText << m_position
+// 		<< pFollowingText << m_duContext->range();
 }
 
 
@@ -57,13 +60,10 @@ QString DSCodeCompletionContext::extractLastExpression( const QString &string ) 
 
 QList<CompletionTreeItemPointer> DSCodeCompletionContext::completionItems(
 bool &abort, bool fullCompletion ){
-	Q_UNUSED( fullCompletion );
-	Q_UNUSED( abort );
-	
 	QList<CompletionTreeItemPointer> items;
 	
 	DUChainReadLocker lock;
-	const DUContextPointer context( m_duContext->findContextAt( m_position ) );
+	const DUContextPointer context( m_duContext->findContextAt( m_position, true ) );
 	if( ! context ){
 		return items;
 	}
@@ -78,98 +78,7 @@ bool &abort, bool fullCompletion ){
 	// tokenize the text into pTokenStream. this will be reused by different code
 	// below to use the token stream to find the right completions to show
 	tokenizeText( m_text );
-	debugLogTokenStream();
-	
-	// test parsing
-	{
-	if( pTokenStream.size() == 0 || pTokenStream.back().kind != Parser::Token_PERIOD ){
-		qDebug() << "not doing completion";
-		return items;
-	}
-	
-	const QByteArray ptext( m_text.toUtf8() );
-	ParseSession session( IndexedString( pDocument ), ptext );
-	EditorIntegrator editor( session );
-	Parser parser;
-	
-	session.prepareCompletion( parser );
-	
-	// copy tokens except the final period
-	copyTokens( pTokenStream, *session.tokenStream(), 0, -2 );
-	
-	// try parsing the token stream into an expression. this usually fails since the expression
-	// is incomplete and can not be fully parsed. if the parsing fails remove one token from
-	// the beginning and try again. at some point the expression will be short enough to be
-	// valid. this should be the expression we have to evaluate to obtain the object type
-	// to use for completion
-	ExpressionAst *ast = nullptr;
-	int i;
-	for( i=0; i<session.tokenStream()->size(); i++ ){
-		parser.rewind( i );
-		if( parser.parseExpression( &ast ) && session.tokenStream()->index() == session.tokenStream()->size() ){
-			break;
-		}
-		ast = nullptr;
-	}
-	
-	if( ast ){
-		DebugVisitor( session.tokenStream(), QString::fromLatin1( ptext ) ).visitNode( ast );
-		
-		ExpressionVisitor exprvisitor( editor, context.data() );
-		exprvisitor.visitExpression( ast );
-		
-		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
-			qDebug() << "exprVisitor lastType=" << exprvisitor.lastType()->toString()
-				<< "lastDecl=" << ( exprvisitor.lastDeclaration().data() ? exprvisitor.lastDeclaration().data()->toString() : "-" );
-		}
-		/*
-		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
-			const StructureType::Ptr type = exprvisitor.lastType().cast<StructureType>();
-			qDebug() << "found expression type" << type->toString();
-		}
-		*/
-		
-
-	}
-	
-#if 0
-	KDevPG::MemoryPool pool;
-	TokenStream pts;
-	Parser parser;
-	parser.setContents( &ptext );
-	parser.setTokenStream( &pts );
-	parser.setMemoryPool( &pool );
-	parser.setDebug( true );
-	parser.tokenize();
-	
-	/*
-	StatementAst *astSta = nullptr;
-	parser.parseStatement( &astSta );
-	if( astSta ){
-		DebugAst( pts, ptext ).visitStatement( astSta );
-	}
-	*/
-	
-	ExpressionInlineIfElseAst *ast = nullptr;
-	parser.parseExpressionInlineIfElse( &ast );
-	if( ast ){
-		DebugVisitor( &pts, QString::fromLatin1( ptext ) ).visitNode( ast );
-		
-		ExpressionVisitor exprvisitor( *editor(), currentContext() );
-		exprvisitor.visitNode( node->begin->extends );
-		
-		if( exprvisitor.lastType()
-		&& exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
-			const StructureType::Ptr baseType = exprvisitor.lastType().cast<StructureType>();
-			BaseClassInstance base;
-			base.baseClass = baseType->indexed();
-			base.access = KDevelop::Declaration::Public;
-			decl->addBaseClass( base );
-		}
-
-	}
-#endif
-	}
+// 	debugLogTokenStream();
 	
 	// depending on the context different completions are reasonable
 	switch( context->type() ){
@@ -191,7 +100,7 @@ bool &abort, bool fullCompletion ){
 	case DUContext::ContextType::Function:
 		// inside "func" definition
 		qDebug() << "DSCodeCompletionContext context type Function";
-		addCompletionCodeBody( items );
+		DSCodeCompletionCodeBody( *this, context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	case DUContext::ContextType::Template:
@@ -213,7 +122,7 @@ bool &abort, bool fullCompletion ){
 		// inside code body of functions, blocks, conditionals, loops, switches,
 		// try catching and variable definitions
 		qDebug() << "DSCodeCompletionContext context type Other";
-		addCompletionCodeBody( items );
+		DSCodeCompletionCodeBody( *this, context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	default:
@@ -301,18 +210,6 @@ void DSCodeCompletionContext::tokenizeText( const QString &expression ){
 	}
 }
 
-void DSCodeCompletionContext::copyTokens( const TokenStream &in, TokenStream &out, int start, int end ){
-	if( end < 0 ){
-		end += in.size();
-	}
-	
-	out.clear();
-	int i;
-	for( i=start; i<=end; i++ ){
-		out.push( in.at( i ) );
-	}
-}
-
 void DSCodeCompletionContext::debugLogTokenStream( const QString &prefix ) const{
 	const int count = pTokenStream.size();
 	int i;
@@ -322,127 +219,6 @@ void DSCodeCompletionContext::debugLogTokenStream( const QString &prefix ) const
 			<< token.kind << "begin=" << token.begin << "end=" << token.end
 			<< QString::fromLatin1( pTokenStreamText.mid( token.begin, token.end - token.begin + 1 ) );
 	}
-}
-
-void DSCodeCompletionContext::addCompletionCodeBody( QList<CompletionTreeItemPointer> &items ){
-	// inside functions completion operates on expressions. this is usually a function call
-	// but can be also the special "=" operator. in this case we consider it a function call
-	// with the object type as only parameter. then we can parse everything as a function call
-	
-	( void )typeToMatch();
-}
-
-
-
-bool DSCodeCompletionContext::endsWithDot( const QString &str ) const{
-	const int dotPos = str.lastIndexOf( '.' );
-	if( dotPos == -1 ){
-		return false;
-	}
-	
-	int i;
-	for( i=dotPos+1; i<str.size(); i++ ){
-		if( ! str[ i ].isSpace() ){
-			return false;
-		}
-	}
-	
-	return true;
-}
-
-KDevelop::AbstractType::Ptr DSCodeCompletionContext::typeToMatch() const{
-	QStack<ExpressionStackEntry> stack = expressionStack( m_text );
-	if( stack.empty() ){
-		return KDevelop::AbstractType::Ptr();
-	}
-	
-	{
-		qDebug() << "DSCodeCompletionContext.typeToMatch: stack";
-		foreach( const ExpressionStackEntry each, stack ){
-			qDebug() << "- startPosition" << each.startPosition << "operatorStart"
-				<< each.operatorStart << "operatorEnd" << each.operatorEnd << "commas"
-				<< each.commas << "token '" << m_text.mid( each.operatorStart, each.operatorEnd - each.operatorStart ) << "'";
-		}
-	}
-	
-	const ExpressionStackEntry entry = stack.pop();
-	if( entry.operatorStart <= entry.startPosition ){
-		return KDevelop::AbstractType::Ptr();
-	}
-	
-	const QString operatorText( m_text.mid( entry.operatorStart, entry.operatorEnd - entry.operatorStart ) );
-	qDebug() << "operatorText" << operatorText;
-	
-	return KDevelop::AbstractType::Ptr();
-}
-
-QStack<DSCodeCompletionContext::ExpressionStackEntry>
-DSCodeCompletionContext::expressionStack( const QString& expression ) const{
-	QStack<ExpressionStackEntry> stack;
-	QByteArray expr(expression.toUtf8());
-	KDevPG::QByteArrayIterator iter(expr);
-	Lexer lexer(iter);
-	bool atEnd=false;
-	ExpressionStackEntry entry;
-
-	entry.startPosition = 0;
-	entry.operatorStart = 0;
-	entry.operatorEnd = 0;
-	entry.commas = 0;
-
-	stack.push(entry);
-
-	qint64 line, lineEnd, column, columnEnd;
-	while(!atEnd)
-	{
-		KDevPG::Token token(lexer.read());
-		switch(token.kind)
-		{
-		case Parser::Token_EOF:
-			atEnd=true;
-			break;
-		case Parser::Token_LPAREN:
-			qint64 sline, scolumn;
-			lexer.locationTable()->positionAt(token.begin, &sline, &scolumn);
-			entry.startPosition = scolumn+1;
-			entry.operatorStart = entry.startPosition;
-			entry.operatorEnd = entry.startPosition;
-			entry.commas = 0;
-
-			stack.push(entry);
-			break;
-		case Parser::Token_RPAREN:
-			if (stack.count() > 1) {
-				stack.pop();
-			}
-			break;
-		case Parser::Token_IDENTIFIER:
-			//temporary hack to allow completion in variable declarations
-			//two identifiers in a row is not possible?
-			if(lexer.size() > 1 && lexer.at(lexer.index()-2).kind == Parser::Token_IDENTIFIER){
-				lexer.locationTable()->positionAt(lexer.at(lexer.index()-2).begin, &line, &column);
-				lexer.locationTable()->positionAt(lexer.at(lexer.index()-2).end+1, &lineEnd, &columnEnd);
-				stack.top().operatorStart = column;
-				stack.top().operatorEnd = columnEnd;
-			}
-			break;
-		case Parser::Token_PERIOD:
-			break;
-		case Parser::Token_COMMA:
-			stack.top().commas++;
-			break;
-		default:
-			// The last operator of every sub-expression is stored on the stack
-			// so that "A = foo." can know that attributes of foo having the same
-			// type as A should be highlighted.
-			qDebug() << token.kind;
-			lexer.locationTable()->positionAt(token.begin, &line, &column);
-			lexer.locationTable()->positionAt(token.end+1, &lineEnd, &columnEnd);
-			stack.top().operatorStart = column;
-			stack.top().operatorEnd = columnEnd;
-		}
-	}
-	return stack;
 }
 
 }

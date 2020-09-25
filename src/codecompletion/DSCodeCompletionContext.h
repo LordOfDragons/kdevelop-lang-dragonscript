@@ -30,13 +30,6 @@ public:
 		const QString& followingText, const CursorInRevision& position, int depth,
 		const QUrl &document );
 	
-	struct ExpressionStackEntry{
-		int startPosition;
-		int operatorStart;
-		int operatorEnd;
-		int commas;
-	};
-	
 	/**
 	 * \brief Extract the last full expression from the string.
 	 * 
@@ -61,25 +54,23 @@ public:
 	void tokenizeText( const QString &expression );
 	
 	/**
-	 * \brief Copy range of tokens from one token stream to the other.
-	 */
-	static void copyTokens( const TokenStream &in, TokenStream &out, int start, int end = -1 );
-	
-	/**
 	 * \brief Log content token stream to debug output.
 	 */
 	void debugLogTokenStream( const QString &prefix = "DSCodeCompletionContext.tokenStream:" ) const;
 	
-	/**
-	 * \brief Add completion items for code bodies.
-	 */
-	void addCompletionCodeBody( QList<CompletionTreeItemPointer> &items );
 	
 	
+	/** \brief Completion text before the cursor. */
+	inline const QString &text() const{ return m_text; }
 	
-	bool endsWithDot( const QString &string ) const;
-	KDevelop::AbstractType::Ptr typeToMatch() const;
-	QStack<ExpressionStackEntry> expressionStack( const QString& expression ) const;
+	/** \brief Document. */
+	inline const QUrl &document() const{ return pDocument; }
+	
+	/** \brief Token stream. */
+	inline TokenStream &tokenStream(){ return pTokenStream; }
+	
+	/** \brief Token stream text. */
+	inline const QByteArray &tokenStreamText() const{ return pTokenStreamText; }
 	
 	
 	

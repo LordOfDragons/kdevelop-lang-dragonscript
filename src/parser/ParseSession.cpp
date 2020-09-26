@@ -67,15 +67,19 @@ bool ParseSession::parse( StartAst **ast ){
 	StartAst *dspAst;
 	bool matched = parser.parseStart( &dspAst );
 	if( matched ) {
-		qDebug() << "KDevDScript: ParseSession::parse Successfully parsed";
+		if( pDebug ){
+			qDebug() << "KDevDScript: ParseSession::parse Successfully parsed";
+		}
 // 		DebugVisitor( pTokenStream, QString::fromLatin1( pContents ) ).visitStart( dspAst );
 // 		DebugAst( *pTokenStream, pContents ).visitStart( dspAst );
 		*ast = dspAst;
 		
 	}else{
 		*ast = nullptr;
-		parser.expectedSymbol( AstNode::StartKind, QStringLiteral( "start" ) );
-		qDebug() << "KDevDScript: ParseSession::parse Couldn't parse content";
+		if( pDebug ){
+			parser.expectedSymbol( AstNode::StartKind, QStringLiteral( "start" ) );
+			qDebug() << "KDevDScript: ParseSession::parse Couldn't parse content";
+		}
 	}
 	pProblems << parser.problems();
 	return matched;

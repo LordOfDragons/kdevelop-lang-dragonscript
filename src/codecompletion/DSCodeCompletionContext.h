@@ -9,10 +9,7 @@
 
 #include <QStack>
 
-using KDevelop::CodeCompletionContext;
-using KDevelop::CompletionTreeItemPointer;
-using KDevelop::CursorInRevision;
-using KDevelop::DUContextPointer;
+using namespace KDevelop;
 
 using KTextEditor::Range;
 using KTextEditor::View;
@@ -44,6 +41,17 @@ public:
 	QList<CompletionTreeItemPointer> completionItems( bool &abort, bool fullCompletion = true ) override;
 	
 	/**
+	 * After completionItems(..) has been called, this may return completion-elements that
+	 * are already grouped, for example using custom grouping(@see CompletionCustomGroupNode
+	 */
+	QList<CompletionTreeElementPointer> ungroupedElements() override;
+	
+	/**
+	 * \brief Add grouped element.
+	 */
+	void addItemGroup( const CompletionTreeElementPointer& group );
+	
+	/**
 	 * \brief Returns true if text ends inside a string or comment.
 	 */
 	bool textEndsInsideCommentOrString( const QString &text ) const;
@@ -66,6 +74,12 @@ public:
 	/** \brief Document. */
 	inline const QUrl &document() const{ return pDocument; }
 	
+	/** \brief The full text leading up to the last separation token ("." for example). */
+	inline const QString &getFullText() const{ return pFullText; }
+	
+	/** \brief The text following after the last separation token (partial member name for example). */
+	inline const QString &getFollowingText() const{ return pFollowingText; }
+	
 	/** \brief Token stream. */
 	inline TokenStream &tokenStream(){ return pTokenStream; }
 	
@@ -85,6 +99,8 @@ private:
 	
 	TokenStream pTokenStream;
 	QByteArray pTokenStreamText;
+	
+	QList<CompletionTreeElementPointer> pItemGroups;
 };
 
 }

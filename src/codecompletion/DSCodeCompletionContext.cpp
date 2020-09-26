@@ -60,6 +60,8 @@ QString DSCodeCompletionContext::extractLastExpression( const QString &string ) 
 
 QList<CompletionTreeItemPointer> DSCodeCompletionContext::completionItems(
 bool &abort, bool fullCompletion ){
+	pItemGroups.clear();
+	
 	QList<CompletionTreeItemPointer> items;
 	
 	DUChainReadLocker lock;
@@ -130,6 +132,14 @@ bool &abort, bool fullCompletion ){
 	}
 	
 	return items;
+}
+
+QList<CompletionTreeElementPointer> DSCodeCompletionContext::ungroupedElements(){
+	return pItemGroups;
+}
+
+void DSCodeCompletionContext::addItemGroup( const CompletionTreeElementPointer& group ){
+	pItemGroups << group;
 }
 
 bool DSCodeCompletionContext::textEndsInsideCommentOrString( const QString &text ) const{

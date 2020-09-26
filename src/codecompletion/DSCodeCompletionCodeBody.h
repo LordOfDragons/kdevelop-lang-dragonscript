@@ -8,10 +8,7 @@
 
 #include <QStack>
 
-using KDevelop::CodeCompletionContext;
-using KDevelop::CompletionTreeItemPointer;
-using KDevelop::CursorInRevision;
-using KDevelop::DUContextPointer;
+using namespace KDevelop;
 
 using KTextEditor::Range;
 using KTextEditor::View;
@@ -23,40 +20,86 @@ class DSCodeCompletionContext;
 
 
 /**
- * \brief Code completion for body code.
+ * Code completion for body code.
  */
 class DSCodeCompletionCodeBody{
 public:
-	/** \brief Create code completion context. */
+	/** Completion mode. */
+	enum class Mode{
+		/**
+		 * Completion can be anything so showe anything.
+		 */
+		everything,
+		
+		/**
+		 * Completion on class type. Show only inner types, static members and constructors.
+		 */
+		type,
+		
+		/**
+		 * Completion on object instance. Show all methods except constructors. Show no inner types.
+		 */
+		instance
+	};
+	
+	
+	/** Create code completion context. */
 	DSCodeCompletionCodeBody( DSCodeCompletionContext &completionContext,
 		const DUContextPointer &context, QList<CompletionTreeItemPointer> &completionItems,
 		bool &abort, bool fullCompletion );
 	
 	/**
-	 * \brief Request completion items.
+	 * Request completion items.
 	 */
 	void completionItems();
 	
 	/**
-	 * \brief Copy range of tokens from one token stream to the other.
+	 * Copy range of tokens from one token stream to the other.
 	 */
 	static void copyTokens( const TokenStream &in, TokenStream &out, int start, int end = -1 );
 	
 	/**
-	 * \brief Find first token from end of token stream where parsing should begin.
+	 * Find first token from end of token stream where parsing should begin.
 	 * 
 	 * We want to find the start of the right most sub expression.
 	 */
 	int findFirstParseToken( const TokenStream& tokenStream, int lastIndex = -1 ) const;
 	
+	/**
+	 * Add matching possible function calls.
+	 */
+	void addFunctionCalls();
+	
+	/**
+	 * Add all members.
+	 */
+	void addAllMembers( Mode mode );
+	
+	/**
+	 * Add types only.
+	 */
+	void addAllTypes();
+	
+	
+	
+protected:
+	void addItemGroupNotEmpty( const char *name, int priority, const QList<CompletionTreeItemPointer> &items );
+	
 	
 	
 private:
-	DSCodeCompletionContext &pCompletionContext;
+	DSCodeCompletionContext &pCodeCompletionContext;
 	const DUContextPointer pContext;
 	QList<CompletionTreeItemPointer> &pCompletionItems;
 	bool &pAbort;
 	const bool pFullCompletion;
+	
+	DUContextPointer pCompletionContext;
+	QVector<QPair<Declaration*, int>> pAllDefinitions;
+	
+	QList<CompletionTreeItemPointer> pConstructorItems;
+	QList<CompletionTreeItemPointer> pOperatorItems;
+	QList<CompletionTreeItemPointer> pStaticItems;
 };
 
 }

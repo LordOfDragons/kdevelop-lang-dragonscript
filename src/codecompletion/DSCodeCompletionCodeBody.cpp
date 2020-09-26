@@ -15,6 +15,8 @@
 #include "ExpressionVisitor.h"
 #include "DumpChain.h"
 #include "TokenText.h"
+#include "items/DSCCItemFunctionCall.h"
+#include "items/DSCodeCompletionItem.h"
 
 
 using KDevelop::CodeCompletionWorker;
@@ -37,7 +39,7 @@ namespace DragonScript {
 DSCodeCompletionCodeBody::DSCodeCompletionCodeBody( DSCodeCompletionContext &completionContext,
 	const DUContextPointer &context, QList<CompletionTreeItemPointer> &completionItems,
 	bool &abort, bool fullCompletion ) :
-pCompletionContext( completionContext ),
+    pCodeCompletionContext( completionContext ),
 pContext( context ),
 pCompletionItems( completionItems ),
 pAbort( abort ),
@@ -48,13 +50,13 @@ pFullCompletion( fullCompletion )
 
 
 void DSCodeCompletionCodeBody::completionItems(){
-	TokenStream &tokenStream = pCompletionContext.tokenStream();
+	TokenStream &tokenStream = pCodeCompletionContext.tokenStream();
 	if( tokenStream.size() == 0 ){
 		return;
 	}
 	
-	const QByteArray ptext( pCompletionContext.text().toUtf8() );
-	ParseSession session( IndexedString( pCompletionContext.document() ), ptext );
+	const QByteArray ptext( pCodeCompletionContext.text().toUtf8() );
+	ParseSession session( IndexedString( pCodeCompletionContext.document() ), ptext );
 	Parser parser;
 	
 	session.prepareCompletion( parser );
@@ -89,6 +91,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 	DUContextPointer completionContext;
 	DeclarationPointer completionDecl;
 	AbstractType::Ptr completionType;
+	Mode mode = Mode::everything;
 	
 	if( startIndex < tokenStream.size() ){
 		// copy tokens except the final period
@@ -134,7 +137,18 @@ void DSCodeCompletionCodeBody::completionItems(){
 		
 		completionType = exprvisitor.lastType();
 		completionDecl = exprvisitor.lastDeclaration();
-		completionContext = completionDecl->context();
+		
+		if( exprvisitor.isTypeName() ){
+			mode = Mode::type;
+			
+		}else{
+			mode = Mode::instance;
+		}
+		
+		const StructureType::Ptr structType = TypePtr<StructureType>::dynamicCast( completionType );
+		if( structType ){
+			completionContext = structType->internalContext( pContext->topContext() );
+		}
 		
 	}else{
 		// completion at the first word. assume context type and declaration
@@ -153,11 +167,20 @@ void DSCodeCompletionCodeBody::completionItems(){
 	// do completion
 	qDebug() << "DSCodeCompletionCodeBody: completion context " << completionDecl.data()->toString();
 	
-	// TODO
-	/*
-	const QVector<QPair<Declaration*, int>> declarations = completionDecl->context()->allDeclarations(
-		CursorInRevision::invalid(), completionDecl->context()->topContext(), true );
-	*/
+	pCompletionContext = completionContext;
+	pAllDefinitions = completionContext->allDeclarations( CursorInRevision::invalid(), completionContext->topContext(), true );
+	
+	addFunctionCalls();
+	addAllMembers( mode );
+// 	addAllTypes();
+	
+	// add item groups
+	// 
+	// NOTE: it seems CompletionCustomGroupNode messes up in the UI if it has no items.
+	//       not creating the group seems to be the only working fix for this problem
+	addItemGroupNotEmpty( "Operators", 300, pOperatorItems );
+	addItemGroupNotEmpty( "Object Construction", 350, pConstructorItems );
+	addItemGroupNotEmpty( "Class Static", 400, pStaticItems );
 }
 
 void DSCodeCompletionCodeBody::copyTokens( const TokenStream &in, TokenStream &out, int start, int end ){
@@ -264,6 +287,91 @@ int DSCodeCompletionCodeBody::findFirstParseToken( const TokenStream& tokenStrea
 	}
 	
 	return 0;
+}
+
+void DSCodeCompletionCodeBody::addFunctionCalls(){
+	/*
+	foreach( auto each, pAllDefinitions ){
+		ClassFunctionDeclaration * const funcdecl = dynamic_cast<ClassFunctionDeclaration*>( each.first );
+		if( funcdecl ){
+			qDebug() << "function" << funcdecl->toString();
+			DSCCItemFunctionCall * const item = new DSCCItemFunctionCall(
+				*funcdecl, DeclarationPointer( each.first ), each.second, 0 );
+			pCompletionItems << CompletionTreeItemPointer( item );
+		}
+	}
+	*/
+}
+
+void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
+	foreach( auto each, pAllDefinitions ){
+		DSCodeCompletionItem * const item = new DSCodeCompletionItem( DeclarationPointer( each.first ), each.second );
+		DUContext * const declContext = each.first->context();
+		bool ignore = false;
+		
+		switch( mode ){
+		case Mode::type:
+			ignore = ( ! item->isType() && ! item->isStatic() )
+				|| ! declContext->parentContext()
+				|| declContext->parentContextOf( pCompletionContext->parentContext() );
+			break;
+			
+		case Mode::instance:
+			ignore = ( item->isType() || item->isConstructor() )
+				|| ! declContext->parentContext()
+				|| declContext->parentContextOf( pCompletionContext->parentContext() );
+			break;
+			
+		default:
+			break;
+		}
+		
+		if( ignore ){
+			delete item;
+			continue;
+		}
+		
+		if( item->isConstructor() ){
+			pConstructorItems << CompletionTreeItemPointer( item );
+			
+		}else if( item->isOperator() ){
+			pOperatorItems << CompletionTreeItemPointer( item );
+			
+		}else if( item->isStatic() ){
+			pStaticItems << CompletionTreeItemPointer( item );
+			
+		}else{
+			pCompletionItems << CompletionTreeItemPointer( item );
+		}
+	}
+}
+
+void DSCodeCompletionCodeBody::addAllTypes(){
+	foreach( auto each, pAllDefinitions ){
+		if( each.first->kind() != Declaration::Kind::Type ){
+			continue;
+		}
+		
+		DSCodeCompletionItem * const item = new DSCodeCompletionItem( DeclarationPointer( each.first ), each.second );
+		
+		if( item->isStatic() ){
+			pStaticItems << CompletionTreeItemPointer( item );
+			
+		}else{
+			pCompletionItems << CompletionTreeItemPointer( item );
+		}
+	}
+}
+
+void DSCodeCompletionCodeBody::addItemGroupNotEmpty( const char *name, int priority,
+const QList<CompletionTreeItemPointer> &items ){
+	if( items.isEmpty() ){
+		return;
+	}
+	
+	CompletionCustomGroupNode * const group = new CompletionCustomGroupNode( name, priority );
+	group->appendChildren( items );
+	pCodeCompletionContext.addItemGroup( CompletionTreeElementPointer( group ) );
 }
 
 }

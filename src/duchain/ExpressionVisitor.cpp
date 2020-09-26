@@ -35,7 +35,8 @@ namespace DragonScript {
 
 ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx ) :
 DynamicLanguageExpressionVisitor( ctx ),
-pEditor( editorIntegrator )
+pEditor( editorIntegrator ),
+pIsTypeName( false )
 {
 	Q_ASSERT( m_context );
 	Q_ASSERT( m_context->topContext() );
@@ -112,6 +113,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		
 	case TokenType::Token_NULL:
 		encounter( Helpers::getTypeNull() );
+		pIsTypeName = false;
 		break;
 		
 	case TokenType::Token_THIS:{
@@ -130,6 +132,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		
 	default:
 		encounterUnknown(); // should never happen
+		pIsTypeName = false;
 	}
 }
 
@@ -168,6 +171,7 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 		if( checkForVoid && name == "void" ){
 			encounter( Helpers::getTypeVoid() );
 			searchContext = nullptr;
+			pIsTypeName = true;
 			
 		}else{
 			if( searchContext ){
@@ -179,11 +183,13 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 					addUnknownName( name );
 				}
 				encounterUnknown();
+				pIsTypeName = false;
 				return;
 			}
 			
 			encounterDecl( *decl );
 			searchContext = decl->internalContext();
+			pIsTypeName = true;
 		}
 		
 		checkForVoid = false;
@@ -196,6 +202,23 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 	DUChainPointer<const DUContext> ctx( lastContext() );
 	if( ! ctx ){
 		encounterUnknown();
+		pIsTypeName = false;
+		return;
+	}
+	
+	if( pIsTypeName ){
+		// base object is a type so find an inner type
+		const QString name( pEditor.tokenText( *node->name ) );
+		Declaration * const decl = Helpers::declarationForName( name, CursorInRevision::invalid(), ctx );
+		
+		if( decl ){
+			encounterDecl( *decl );
+			pIsTypeName = true;
+			
+		}else{
+			encounterUnknown();
+			pIsTypeName = false;
+		}
 		return;
 	}
 	
@@ -241,12 +264,16 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 			}
 		}
 		
-		if( declarations.isEmpty() || dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
+		Declaration * const decl = declarations.first();
+		if( declarations.isEmpty() || dynamic_cast<ClassFunctionDeclaration*>( decl ) ){
 			encounterUnknown();
+			pIsTypeName = false;
 			return;
 		}
 		
-		encounterDecl( *declarations.first() );
+		encounterDecl( *decl );
+		
+		pIsTypeName = decl->kind() == Declaration::Kind::Type;
 	}
 }
 
@@ -369,6 +396,7 @@ void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	do{
 		if( ! iter->element->op || iter->element->op->op == -1 ){
 			encounterUnknown(); // should never happen
+			pIsTypeName = false;
 			return;
 		}
 		
@@ -387,6 +415,7 @@ void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			
 		default:
 			encounterUnknown(); // should never happen
+			pIsTypeName = false;
 			return;
 		}
 		
@@ -428,38 +457,47 @@ void ExpressionVisitor::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *
 
 void ExpressionVisitor::visitStatementFor( StatementForAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementIf( StatementIfAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementReturn( StatementReturnAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementSelect( StatementSelectAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementThrow( StatementThrowAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementTry( StatementTryAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementVariableDefinitions( StatementVariableDefinitionsAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::visitStatementWhile( StatementWhileAst* ){
 	encounterUnknown(); // void
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterDecl( Declaration &decl ){
 	encounter( decl.abstractType(), DeclarationPointer( &decl ) );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterObject(){
@@ -467,6 +505,7 @@ void ExpressionVisitor::encounterObject(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeObject( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterBool(){
@@ -474,6 +513,7 @@ void ExpressionVisitor::encounterBool(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeBool( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterByte(){
@@ -481,6 +521,7 @@ void ExpressionVisitor::encounterByte(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeByte( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterInt(){
@@ -488,6 +529,7 @@ void ExpressionVisitor::encounterInt(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeInt( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterFloat(){
@@ -495,6 +537,7 @@ void ExpressionVisitor::encounterFloat(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeFloat( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterString(){
@@ -502,6 +545,7 @@ void ExpressionVisitor::encounterString(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeString( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::encounterBlock(){
@@ -509,6 +553,7 @@ void ExpressionVisitor::encounterBlock(){
 	DeclarationPointer declPtr;
 	Helpers::getTypeBlock( declPtr, typePtr );
 	encounter( typePtr, declPtr );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
@@ -516,6 +561,7 @@ const AbstractType::Ptr &argument ){
 	QVector<AbstractType::Ptr> signature;
 	signature.append( argument );
 	checkFunctionCall( node, context, signature );
+	pIsTypeName = false;
 }
 
 void ExpressionVisitor::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> ctx,
@@ -528,6 +574,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	}
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();
+		pIsTypeName = false;
 		return;
 	}
 	
@@ -536,6 +583,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( top, signature, declarations );
 	if( useFunction ){
 		encounter( useFunction->type<FunctionType>()->returnType(), DeclarationPointer( useFunction ) );
+		pIsTypeName = false;
 		return;
 	}
 	
@@ -546,11 +594,13 @@ const QVector<AbstractType::Ptr> &signature ){
 		useFunction = possibleFunctions.first();
 		if( useFunction ){
 			encounter( useFunction->type<FunctionType>()->returnType(), DeclarationPointer( useFunction ) );
+			pIsTypeName = false;
 			return;
 		}
 	}
 	
 	encounterUnknown();
+	pIsTypeName = false;
 }
 
 bool ExpressionVisitor::clearVisitNode( AstNode *node ){
@@ -565,6 +615,7 @@ bool ExpressionVisitor::clearVisitNode( AstNode *node ){
 	}
 	
 	encounterUnknown();
+	pIsTypeName = false;
 	return false;
 }
 

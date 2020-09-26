@@ -60,6 +60,8 @@ private:
 	
 	QSet<QString> m_unknownNames;
 	
+	bool pIsTypeName;
+	
 	
 	
 public:
@@ -115,6 +117,9 @@ public:
 	
 	/** \brief Context matching last type found or nullptr. */
 	const DUContext *lastContext() const;
+	
+	/** \brief Visited expression represents a type name not an object instance. */
+	inline bool isTypeName() const{ return pIsTypeName; }
 	
 	
 	

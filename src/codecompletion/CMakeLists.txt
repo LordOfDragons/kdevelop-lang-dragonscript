@@ -7,6 +7,10 @@ set(codecompletion_STAT_SRCS
 	DSCodeCompletionContext.h
 	DSCodeCompletionCodeBody.cpp
 	DSCodeCompletionCodeBody.h
+	items/DSCodeCompletionItem.cpp
+	items/DSCodeCompletionItem.cpp
+	items/DSCCItemFunctionCall.h
+	items/DSCCItemFunctionCall.h
 )
 
 add_library(kdevdscodecompletion STATIC ${codecompletion_SRCS} ${codecompletion_STAT_SRCS})

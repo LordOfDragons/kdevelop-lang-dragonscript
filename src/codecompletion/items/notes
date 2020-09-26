@@ -1,0 +1,44 @@
+Kate Templating:
+	https://docs.kde.org/stable5/en/applications/kate/kate-application-plugin-snippets.html
+
+API:
+	KTextEditor::View::insertTemplate()
+
+Snippets
+	The text your snippet will insert into the document.
+	
+	A snippet can contain editable fields. They can be cycled by pressing Tab.
+	The following expressions can be used in the template text to create fields:
+	
+	${field_name} creates a simple, editable field. All subsequent occurrences
+		of the same field_name create fields which mirror the contents of the
+		first during editing.
+	
+	${field_name=default} can be used to specify a default value for the field.
+		default can be any JavaScript expression.
+	
+	Use ${field_name=text} to specify a fixed string as default value.
+	
+	${func(other_field1, other_field2, ...)} can be used to create a field which
+		evaluates a JavaScript function on each edit and contains its contents.
+		See the Scripts tab for more information.
+	
+	${cursor} can be used to mark the end position of the cursor after everything
+		else was filled in.
+	
+Scripts
+	JavaScript helper functions to use in your snippets.
+	
+	All JavaScript functions should return the contents you want to place in a
+	template field as a string.
+	
+	Functions are called in a scope which contains the contents of all editable
+	template fields as local variables. For example in a snippet containing
+	${field}, a variable called field will be present which contains the
+	up-to-date contents of the template field. Those variables can either be
+	used in the function statically or passed as arguments, by using the
+	${func(field)} or ${field2=func(field)} syntax in the snippet string.
+	
+	You can use the Kate scripting API to get the selected text, full text, file
+	name and more by using the appropriate methods of the document and view
+	objects. Refer to the scripting API documentation for more information

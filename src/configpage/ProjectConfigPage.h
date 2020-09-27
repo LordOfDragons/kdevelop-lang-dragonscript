@@ -7,9 +7,7 @@
 
 #include "configpageexport.h"
 
-using KDevelop::ConfigPage;
-using KDevelop::IProject;
-using KDevelop::IPlugin;
+using namespace KDevelop;
 
 class Ui_ProjectConfig;
 
@@ -34,8 +32,6 @@ public Q_SLOTS:
 	void apply() override;
 	void defaults() override;
 	void reset() override;
-	
-	void editPathDSIChanged();
 	
 	void btnPathIncludeSelect();
 	void btnPathIncludeAdd();

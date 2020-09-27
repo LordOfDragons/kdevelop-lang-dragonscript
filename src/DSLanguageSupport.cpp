@@ -1,8 +1,10 @@
 #include "DSLanguageSupport.h"
 #include "DSParseJob.h"
 #include "Highlighting.h"
+#include "DSSessionSettings.h"
 #include "codecompletion/DSCodeCompletionModel.h"
 #include "configpage/ProjectConfigPage.h"
+#include "configpage/SessionConfigPage.h"
 
 #include <interfaces/icore.h>
 #include <interfaces/idocumentcontroller.h>
@@ -12,18 +14,11 @@
 #include <language/duchain/duchain.h>
 #include <language/duchain/duchainlock.h>
 
-#include <QDebug>
-
 #include <KPluginFactory>
 #include <QReadWriteLock>
 
-using KDevelop::ICore;
-using KDevelop::CodeCompletion;
-using KDevelop::DUChainReadLocker;
-using KDevelop::DUChain;
-using KDevelop::SourceFormatterStyleItem;
-using KDevelop::SourceFormatterStyle;
 
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -37,8 +32,9 @@ IPlugin(QStringLiteral("dragonscriptlanguagesupport"), parent),
 pHighlighting( new Highlighting( this ) )
 {
 	Q_UNUSED(args);
-	qDebug() << "DSLanguageSupport: Constructor";
 	pSelf = this;
+	
+	DSSessionSettings::self.update();
 	
 	DSCodeCompletionModel * const codeCompletion = new DSCodeCompletionModel( this );
 	new CodeCompletion( this, codeCompletion, "DragonScript" );
@@ -47,7 +43,6 @@ pHighlighting( new Highlighting( this ) )
 }
 
 DSLanguageSupport::~DSLanguageSupport(){
-	qDebug() << "DSLanguageSupport: Destructor";
 	parseLock()->lockForWrite();
 	// By locking the parse-mutexes, we make sure that parse jobs get a chance to finish in a good state
 	parseLock()->unlock();
@@ -63,12 +58,22 @@ QString DSLanguageSupport::name() const{
 }
 
 ParseJob *DSLanguageSupport::createParseJob(const IndexedString& url){
-	qDebug() << "DSLanguageSupport: createParseJob";
 	return new DSParseJob( url, this );
 }
 
 ICodeHighlighting *DSLanguageSupport::codeHighlighting() const{
 	return pHighlighting;
+}
+
+int DSLanguageSupport::configPages() const{
+	return 1;
+}
+
+ConfigPage *DSLanguageSupport::configPage( int number, QWidget *parent ){
+	if( number == 0 ){
+		return new SessionConfigPage( this, parent );
+	}
+	return nullptr;
 }
 
 int DSLanguageSupport::perProjectConfigPages() const{

@@ -10,13 +10,10 @@
 
 #include <language/duchain/topducontext.h>
 
-using KDevelop::ILanguageSupport;
-using KDevelop::IndexedString;
-using KDevelop::IProblem;
-using KDevelop::ParseJob;
-using KDevelop::ProblemPointer;
-using KDevelop::ReferencedTopDUContext;
-using KDevelop::TopDUContext;
+#include "DSProjectSettings.h"
+
+
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -44,6 +41,7 @@ protected:
 private:
 	DSParseJob *pParentJob; ///< parent job if this one is an include
 	ReferencedTopDUContext pDUContext;
+	DSProjectSettings pProjectSettings;
 	
 	/**
 	 * Checks if a parent job parses already \p document. Used to prevent

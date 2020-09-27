@@ -111,7 +111,7 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 		
 		const QVector<DUChainPointer<const DUContext>> &namespaces = pinvisitor.namespaces();
 		foreach( const DUChainPointer<const DUContext> &each, namespaces ){
-			qDebug() << "KDevDScript: DeclarationBuilder::visitPin add" << each.operator->();
+// 			qDebug() << "KDevDScript: DeclarationBuilder::visitPin add" << each.operator->();
 			pPinned.append( each );
 		}
 	}

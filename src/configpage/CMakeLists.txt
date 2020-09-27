@@ -2,12 +2,16 @@ set(configpage_STAT_SRCS
 	ProjectConfigPage.cpp
 	ProjectConfigPage.h
 	projectConfigPage.ui
+	SessionConfigPage.cpp
+	SessionConfigPage.h
+	sessionConfigPage.ui
 )
 
 add_library(kdevdsconfigpage STATIC ${configpage_SRCS} ${configpage_STAT_SRCS})
 
 ki18n_wrap_ui(configpage_STAT_SRCS
 	projectConfigPage.ui
+	sessionConfigPage.ui
 )
 
 generate_export_header(kdevdsconfigpage EXPORT_MACRO_NAME KDEVDSCONFIGPAGE_EXPORT EXPORT_FILE_NAME configpageexport.h)

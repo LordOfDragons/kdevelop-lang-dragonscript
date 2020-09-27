@@ -678,7 +678,9 @@ void Parser::extractTodosFromComment( const QString &comment, qint64 startPositi
 	// mess should work at all. disabled until then
 	#if 0
 	if( startPosition < 0 ){
-		qDebug() << "extractTodosFromComment" << startPosition;
+		if( pDebug) {
+			qDebug() << "extractTodosFromComment" << startPosition;
+		}
 	}
 	auto i = pTodoMarkers.globalMatch( comment );
 	while( i.hasNext() ){
@@ -778,12 +780,16 @@ void Parser::expectedSymbol( int expectedSymbol, const QString &name ){
 	qint64 col;
 	qint64 index = tokenStream->index() - 1;
 	if( index == -1 ){
-		qDebug() << "KDevDScript: Parser::expectedSymbol token" << name << "but index is -1!";
+		if( pDebug ){
+			qDebug() << "KDevDScript: Parser::expectedSymbol token" << name << "but index is -1!";
+		}
 		return;
 	}
 	Token &token = tokenStream->at( index );
 	
-	qDebug() << "KDevDScript: Parser::expectedSymbol token " << name << "starts at:" << token.begin << "index is:" << index;
+	if( pDebug ){
+		qDebug() << "KDevDScript: Parser::expectedSymbol token " << name << "starts at:" << token.begin << "index is:" << index;
+	}
 	tokenStream->startPosition( index, &line, &col );
 	QString tokenValue = tokenText( token.begin, token.end );
 	qint64 eLine;

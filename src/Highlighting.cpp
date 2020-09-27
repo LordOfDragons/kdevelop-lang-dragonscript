@@ -12,7 +12,6 @@ namespace DragonScript{
 
 HighlightingInstance::HighlightingInstance( const Highlighting *highlighting ) :
 CodeHighlightingInstance( highlighting ){
-	qDebug() << "HighlightingInstance: constructor";
 }
 
 void HighlightingInstance::highlightUse( DUContext *context, int index, const QColor &color ){

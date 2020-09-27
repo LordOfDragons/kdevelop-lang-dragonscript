@@ -264,8 +264,14 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 			}
 		}
 		
+		if( declarations.isEmpty() ){
+			encounterUnknown();
+			pIsTypeName = false;
+			return;
+		}
+		
 		Declaration * const decl = declarations.first();
-		if( declarations.isEmpty() || dynamic_cast<ClassFunctionDeclaration*>( decl ) ){
+		if( dynamic_cast<ClassFunctionDeclaration*>( decl ) ){
 			encounterUnknown();
 			pIsTypeName = false;
 			return;
@@ -590,7 +596,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	// find functions matching with auto-casting
 	const QVector<ClassFunctionDeclaration*> possibleFunctions(
 		Helpers::autoCastableFunctions( top, signature, declarations ) );
-	if( ! possibleFunctions.empty() ){
+	if( ! possibleFunctions.isEmpty() ){
 		useFunction = possibleFunctions.first();
 		if( useFunction ){
 			encounter( useFunction->type<FunctionType>()->returnType(), DeclarationPointer( useFunction ) );

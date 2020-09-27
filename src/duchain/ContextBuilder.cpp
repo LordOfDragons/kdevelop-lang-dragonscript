@@ -8,11 +8,13 @@
 #include "ContextBuilder.h"
 #include "EditorIntegrator.h"
 #include "Helpers.h"
+#include "ImportPackageLanguage.h"
+#include "ImportPackageDragengine.h"
+#include "ImportPackageDirectory.h"
+#include "../DSLanguageSupport.h"
 
-using KDevelop::ICore;
-using KDevelop::DUChain;
-using KDevelop::DUChainReadLocker;
-using KDevelop::DUChainWriteLocker;
+
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -27,7 +29,7 @@ const ReferencedTopDUContext& updateContext ){
 // 	}
 	
 	if( updateContext ){
-		qDebug() << "KDevDScript: ContextBuilder::build: rebuilding duchain for" << url.str() << "(was built before)";
+// 		qDebug() << "KDevDScript: ContextBuilder::build: rebuilding duchain for" << url.str() << "(was built before)";
 		DUChainWriteLocker lock;
 		Q_ASSERT( updateContext->type() == DUContext::Global );
 		updateContext->clearImportedParentContexts();
@@ -35,7 +37,7 @@ const ReferencedTopDUContext& updateContext ){
 		updateContext->clearProblems();
 		
 	}else{
-		qDebug() << "KDevDScript: ContextBuilder::build: building duchain for" << url.str();
+// 		qDebug() << "KDevDScript: ContextBuilder::build: building duchain for" << url.str();
 	}
 	
 	return ContextBuilderBase::build( url, node, updateContext );
@@ -49,15 +51,64 @@ void ContextBuilder::setEditor( EditorIntegrator *editor ){
 void ContextBuilder::startVisiting( AstNode *node ){
 // 	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
 	
+	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document().toUrl() );
 	TopDUContext * const top = topContext();
 	
-	// if this file is not a documentation file make it import the documentation file contexts
-	if( ! Helpers::getDocumentationFiles().contains( document() ) ){
+	// find import package this file belongs to if any
+	ImportPackages &importPackages = DSLanguageSupport::self()->importPackages();
+	ImportPackage::Ref ownerPackage( importPackages.packageContaining( document() ) );
+	
+	// if the file belongs to a package add the dependencies of the package
+	if( ownerPackage ){
 		DUChainWriteLocker lock;
-		pRequiresReparsing = ! Helpers::addImportsDocumentationFileContexts( top );
+		foreach( const ImportPackage::Ref &each, ownerPackage->dependsOn() ){
+			if( ! pRequiresReparsing ){
+				pRequiresReparsing = ! each->addImports( top );
+			}
+		}
+		
+	// otherwise this is a project document
+	}else{
+		DUChainWriteLocker lock;
+		// add language import package
+		if( ! pRequiresReparsing ){
+			pRequiresReparsing = ! ImportPackageLanguage::self()->addImports( top );
+		}
+		
+		// add dragengine import package
+		if( ! pRequiresReparsing ){
+			pRequiresReparsing = ! ImportPackageDragengine::self()->addImports( top );
+		}
+		
+		// add import package for each project import set by the user
+		if( ! pRequiresReparsing && project ){
+			/*
+			const KSharedConfigPtr config( project->projectConfiguration() );
+			foreach( const QString &each, config->additionalConfigSources() ){
+				qDebug() << "KDevDScript ContextBuilder: additional config sources" << each;
+			}
+			*/
+			
+			const KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
+			const QStringList list( config.readEntry( "pathInclude", QStringList() ) );
+			
+			foreach( const QString &dir, list ){
+				if( pRequiresReparsing ){
+					continue;
+				}
+				
+				const QString name( QString( "#dir#" ) + dir );
+				ImportPackage::Ref package( importPackages.packageNamed( name ) );
+				if( ! package ){
+					package = ImportPackage::Ref( new ImportPackageDirectory( name, dir ) );
+					importPackages.addPackage( package );
+				}
+				pRequiresReparsing = ! package->addImports( top );
+			}
+		}
 	}
 	
-	// also add all include directory files as imports for project files
+	/*
 	if( ! pRequiresReparsing ){
 		IProject * const project = ICore::self()->projectController()->findProjectForUrl( document().toUrl() );
 		if( project ){
@@ -69,6 +120,7 @@ void ContextBuilder::startVisiting( AstNode *node ){
 			}
 		}
 	}
+	*/
 	
 	// visit node to start building
 	visitNode( node );

@@ -10,6 +10,8 @@ kdevplatform_add_plugin(dragonscriptlanguagesupport
 	SOURCES DSLanguageSupport.cpp
 	        DSParseJob.cpp
 	        Highlighting.cpp
+	        DSSessionSettings.cpp
+	        DSProjectSettings.cpp
 )
 
 target_link_libraries(dragonscriptlanguagesupport

@@ -15,6 +15,16 @@ set(duchain_STAT_SRCS
 	UseBuilder.h
 	DumpChain.cpp
 	DumpChain.h
+	ImportPackage.cpp
+	ImportPackage.h
+	ImportPackageDragengine.cpp
+	ImportPackageDragengine.h
+	ImportPackageLanguage.cpp
+	ImportPackageLanguage.h
+	ImportPackageDirectory.cpp
+	ImportPackageDirectory.h
+	ImportPackages.cpp
+	ImportPackages.h
 )
 
 add_library(kdevdsduchain STATIC ${duchain_SRCS} ${duchain_STAT_SRCS})

@@ -8,6 +8,7 @@
 #include <language/duchain/duchain.h>
 #include <language/duchain/topducontext.h>
 #include <interfaces/icore.h>
+#include <interfaces/isession.h>
 #include <interfaces/ilanguagecontroller.h>
 #include <interfaces/iprojectcontroller.h>
 #include <language/backgroundparser/backgroundparser.h>
@@ -25,6 +26,7 @@
 #include "DSParseJob.h"
 #include "ParseSession.h"
 #include "DSLanguageSupport.h"
+#include "DSSessionSettings.h"
 #include "dsp_debugvisitor.h"
 #include "duchain/DeclarationBuilder.h"
 #include "duchain/EditorIntegrator.h"
@@ -76,17 +78,15 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	
 	ProblemPointer p = readContents();
 	
-	if( ! ( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) )
-	&& ! isUpdateRequired( languageString ) ){
+	if( ! ( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) ) && ! isUpdateRequired( languageString ) ){
 		DUChainReadLocker lock;
-		foreach( const ParsingEnvironmentFilePointer &file,
-		DUChain::self()->allEnvironmentFiles( document() ) ){
+		foreach( const ParsingEnvironmentFilePointer &file, DUChain::self()->allEnvironmentFiles( document() ) ){
 			if( file->language() != languageString ){
 				continue;
 			}
 			
 			if( ! file->needsUpdate() && file->featuresSatisfied( minimumFeatures() ) && file->topContext() ){
-				qDebug() << "KDevDScript: DSParseJob::run: Already up to date" << document().str();
+// 				qDebug() << "KDevDScript: DSParseJob::run: Already up to date" << document().str();
 				setDuChain( file->topContext() );
 				if( ICore::self()->languageController()->backgroundParser()->trackerForUrl( document() ) ){
 					lock.unlock();
@@ -97,7 +97,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 			break;
 		}
 	}
-	qDebug() << "KDevDScript: DSParseJob::run: parsing" << document().str();
+// 	qDebug() << "KDevDScript: DSParseJob::run: parsing" << document().str();
 	
 	ReferencedTopDUContext toUpdate = nullptr;
 	{
@@ -135,7 +135,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		pDUContext = builder.build( document(), ast, toUpdate.data() );
 		
 		if( builder.requiresReparsing() ){
-			qDebug() << "KDevDScript: DSParseJob::run: Reschedule file" << document().str() << "for parsing";
+// 			qDebug() << "KDevDScript: DSParseJob::run: Reschedule file" << document().str() << "for parsing";
 			abortJob();
 			const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
 					minimumFeatures() | TopDUContext::VisibleDeclarationsAndContexts | Resheduled );
@@ -167,7 +167,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		}
 		}
 		
-		qDebug() << "KDevDScript: DSParseJob::run: Parsing succeeded" << document().str();
+// 		qDebug() << "KDevDScript: DSParseJob::run: Parsing succeeded" << document().str();
 		
 		if( abortRequested() || ICore::self()->shuttingDown() ){
 			abortJob();
@@ -178,7 +178,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		highlightDUChain();
 		
 	}else{
-		qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
+// 		qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
 		
 		DUChainWriteLocker lock;
 		pDUContext = toUpdate.data();
@@ -232,7 +232,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	setDuChain( pDUContext );
 	
 	DUChain::self()->emitUpdateReady( document(), duChain() );
-	qDebug() << "KDevDScript: DSParseJob::run: emitUpdateReady" << document().str();
+// 	qDebug() << "KDevDScript: DSParseJob::run: emitUpdateReady" << document().str();
 }
 
 void DSParseJob::setParentJob( DSParseJob *job ){
@@ -263,7 +263,7 @@ EditorIntegrator *editor, IProblem::Source source, IProblem::Severity severity )
 	p->setSeverity( severity );
 	p->setDescription( description );
 	p->setFinalLocation( DocumentRange( document(), editor->findRange( *node ).castToSimpleRange() ) );
-	qDebug() << "KDevDScript: DSParseJob::run:" << p->description();
+// 	qDebug() << "KDevDScript: DSParseJob::run:" << p->description();
 	return p;
 }
 

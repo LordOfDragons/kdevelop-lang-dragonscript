@@ -5,7 +5,6 @@
 #include <QPair>
 #include <QMetaType>
 #include <QDirIterator>
-
 #include <QDebug>
 
 #include <language/duchain/aliasdeclaration.h>
@@ -34,6 +33,7 @@
 
 #include "Helpers.h"
 #include "ExpressionVisitor.h"
+#include "ImportPackageLanguage.h"
 
 using KDevelop::AliasDeclaration;
 using KDevelop::BackgroundParser;
@@ -48,15 +48,8 @@ using KDevelop::FunctionType;
 
 namespace DragonScript {
 
-QMap<QString, QStringList> Helpers::cachedIncludeFiles;
-QStringList Helpers::dataDirs;
-QVector<IndexedString> Helpers::documentationFiles;
 IndexedString Helpers::documentationFileObject;
 IndexedString Helpers::documentationFileEnumeration;
-QVector<ReferencedTopDUContext> Helpers::documentationFileContexts;
-bool Helpers::documentationFileContextsReady = false;
-bool Helpers::documentationFileContextsParsing = false;
-QMutex Helpers::cacheMutex;
 
 KDevelop::AbstractType::Ptr Helpers::pTypeVoid;
 KDevelop::AbstractType::Ptr Helpers::pTypeNull;
@@ -536,7 +529,7 @@ const QVector<DUChainPointer<const DUContext>> &pinned ){
 	}
 	
 	// find declaration in basic language documentation
-	const QVector<ReferencedTopDUContext> basicContexts( getDocumentationFileContexts() );
+	const QVector<ReferencedTopDUContext> basicContexts( ImportPackageLanguage::self()->getContexts() );
 	foreach( const ReferencedTopDUContext &basicContext, basicContexts ){
 		declarations = basicContext->findDeclarations( identifier );
 		if( ! declarations.isEmpty() ){
@@ -629,7 +622,7 @@ const QVector<DUChainPointer<const DUContext>> &pinned ){
 	//QVector<ReferencedTopDUContext> importedContexts( getDocumentationFileContexts() );
 	
 	// find declaration in basic language documentation
-	QVector<ReferencedTopDUContext> basicContexts( getDocumentationFileContexts() );
+	QVector<ReferencedTopDUContext> basicContexts( ImportPackageLanguage::self()->getContexts() );
 	foreach( const ReferencedTopDUContext &basicContext, basicContexts ){
 		declarations = basicContext->findDeclarations( identifier );
 		foreach( Declaration *declaration, declarations ){
@@ -787,69 +780,6 @@ const QVector<KDevelop::AbstractType::Ptr> &signature, const QVector<Declaration
 
 
 
-void Helpers::dropIncludeFileContexts( const QString &includeDir ){
-	QMap<QString, QStringList>::iterator iter = cachedIncludeFiles.find( includeDir );
-	if( iter != cachedIncludeFiles.end() ){
-		cachedIncludeFiles.erase( iter );
-	}
-}
-
-bool Helpers::addImportsIncludePath( TopDUContext *top, const QString &includeDir ){
-	QStringList list;
-	
-	// ensure file listing exists
-	if( ! cachedIncludeFiles.contains( includeDir ) ){
-		qDebug() << "KDevDScript: Helpers::getIncludeFileContexts: searching include directory" << includeDir;
-		QDirIterator iter( includeDir, QStringList() << "*.ds", QDir::Files, QDirIterator::Subdirectories );
-		QMutexLocker lock( &cacheMutex );
-		while( iter.hasNext() ){
-			list.append( iter.next() );
-		}
-		
-		cachedIncludeFiles.insert( includeDir, list ).value();
-		
-		foreach( const QString &filename, list ){
-			//qDebug() << "KDevDScript: Helpers::getIncludeFileContexts: parsing" << filename;
-			ICore::self()->languageController()->backgroundParser()->addDocument(
-				IndexedString( filename ), KDevelop::TopDUContext::ForceUpdate,
-				BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
-		}
-	}
-	
-	// TODO make this correct later on
-	const QVector<ReferencedTopDUContext> contexts( getImportsIncludeContexts( includeDir ) );
-	if( ! contexts.isEmpty() ){
-		QVector<QPair<TopDUContext*, CursorInRevision>> imports;
-		foreach( const ReferencedTopDUContext &each, contexts ){
-			imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
-		}
-		top->addImportedParentContexts( imports );
-	}
-	
-	return true;
-}
-
-QVector<ReferencedTopDUContext> Helpers::getImportsIncludeContexts( const QString &includeDir ){
-	QVector<ReferencedTopDUContext> contexts;
-	
-	if( ! cachedIncludeFiles.contains( includeDir ) ){
-		return contexts;
-	}
-	
-	const QStringList &files = cachedIncludeFiles[ includeDir ];
-	foreach( const QString &file, files ){
-		const IndexedString isfile( file );
-		TopDUContext * const context = DUChain::self()->chainForDocument( isfile );
-		if( context ){
-			contexts.append( ReferencedTopDUContext( context ) );
-		}
-	}
-	
-	return contexts;
-}
-
-
-
 QVector<DUContext*> Helpers::internalContextsForClass( const KDevelop::StructureType::Ptr classType,
 const TopDUContext *context, ContextSearchFlags flags, int depth ){
 	QVector<DUContext*> searchContexts;
@@ -886,60 +816,6 @@ Declaration *Helpers::resolveAliasDeclaration( Declaration *decl ){
 	}
 }
 
-QStringList Helpers::getDataDirs() {
-	if( dataDirs.isEmpty() ){
-		dataDirs = QStandardPaths::locateAll( QStandardPaths::GenericDataLocation,
-			"kdevdragonscriptsupport/dslangdoc", QStandardPaths::LocateDirectory );
-	}
-	return dataDirs;
-}
-
-const QVector<IndexedString> &Helpers::getDocumentationFiles(){
-	if( documentationFiles.isEmpty() ){
-		QStringList files;
-		files.append( "bool.ds" );
-		files.append( "int.ds" );
-		files.append( "byte.ds" );
-		files.append( "float.ds" );
-		files.append( "Object.ds" );
-		files.append( "Exception.ds" );
-		files.append( "Enumeration.ds" );
-		files.append( "String.ds" );
-		files.append( "Array.ds" );
-		files.append( "Dictionary.ds" );
-		files.append( "Set.ds" );
-		files.append( "Block.ds" );
-		files.append( "Byte.ds" );
-		files.append( "Boolean.ds" );
-		files.append( "Integer.ds" );
-		files.append( "Float.ds" );
-		files.append( "WeakReference.ds" );
-		files.append( "ObjectReference.ds" );
-		files.append( "TimeDate.ds" );
-		files.append( "math/Math.ds" );
-		files.append( "exceptions/EDivisionByZero.ds" );
-		files.append( "exceptions/EInvalidCast.ds" );
-		files.append( "exceptions/EInvalidParam.ds" );
-		files.append( "exceptions/ENullPointer.ds" );
-		files.append( "exceptions/EOutOfBounds.ds" );
-		files.append( "exceptions/EOutOfMemory.ds" );
-		files.append( "introspection/DS.ds" );
-		files.append( "introspection/Package.ds" );
-		files.append( "introspection/Class.ds" );
-		files.append( "introspection/Variable.ds" );
-		files.append( "introspection/Function.ds" );
-		
-		foreach( const QString &file, files ){
-			auto path = QStandardPaths::locate( QStandardPaths::GenericDataLocation,
-				QString( "kdevdragonscriptsupport/dslangdoc/" ) + file );
-			Helpers::documentationFiles.append( IndexedString( path ) );
-			//qDebug() << "KDevDScript: Helpers::getDocumentationFiles add" << path;
-		}
-	}
-	
-	return documentationFiles;
-}
-
 IndexedString Helpers::getDocumentationFileObject(){
 	if( documentationFileObject.isEmpty() ){
 		documentationFileObject = IndexedString(
@@ -958,95 +834,8 @@ IndexedString Helpers::getDocumentationFileEnumeration(){
 	return documentationFileEnumeration;
 }
 
-QVector<ReferencedTopDUContext> Helpers::getDocumentationFileContexts(){
-// 	qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: ready" << documentationFileContextsReady;
-	if( ! documentationFileContextsReady ){
-		const QVector<IndexedString> &files = getDocumentationFiles();
-		documentationFileContexts.clear();
-		
-		if( documentationFileContextsParsing ){
-			foreach( const IndexedString &file, files ){
-				TopDUContext * const context = DUChain::self()->chainForDocument( file );
-				if( context ){
-// 					qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: File is ready:" << file;
-					documentationFileContexts.append( ReferencedTopDUContext( context ) );
-					
-				}else{
-// 					qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: Parsing file not finished yet:" << file;
-					documentationFileContexts.clear();
-					break;
-				}
-			}
-			
-		}else{
-			bool allReady = true;
-			documentationFileContextsParsing = true;
-			
-			foreach( const IndexedString &file, files ){
-				TopDUContext * const context = DUChain::self()->chainForDocument( file );
-				if( context ){
-// 					qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: File has context:" << file;
-					documentationFileContexts.append( ReferencedTopDUContext( context ) );
-					
-				}else{
-					qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: File has no context, parsing it:" << file;
-					ICore::self()->languageController()->backgroundParser()->addDocument( file,
-						KDevelop::TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
-						0, ParseJob::FullSequentialProcessing );
-					allReady = false;
-				}
-			}
-			
-			if( ! allReady ){
-				documentationFileContexts.clear();
-			}
-		}
-		
-		if( ! documentationFileContexts.isEmpty() ){
-			qDebug() << "KDevDScript: Helpers::getDocumentationFileContexts: All files read";
-			
-			if( documentationFileContextsParsing ){
-				// re-parse all language files. this is required since language files depend
-				// on the definition of each other and the parsing order can be messed up.
-				// this reparsing has no effect on the context but will trigger reparsing
-				// of source files once the individual files are updated
-				foreach( const IndexedString &file, files ){
-					ICore::self()->languageController()->backgroundParser()->addDocument( file,
-						KDevelop::TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
-						0, ParseJob::FullSequentialProcessing );
-				}
-			}
-			
-			documentationFileContextsParsing = false;
-			documentationFileContextsReady = true;
-		}
-	}
-	
-	QVector<ReferencedTopDUContext> contexts;
-	foreach( const ReferencedTopDUContext &context, documentationFileContexts ){
-		contexts.append( context );
-	}
-	return contexts;
-}
-
-bool Helpers::addImportsDocumentationFileContexts( TopDUContext *top ){
-	const QVector<ReferencedTopDUContext> contexts( Helpers::getDocumentationFileContexts() );
-	if( contexts.isEmpty() ){
-		return false;
-	}
-	
-	QVector<QPair<TopDUContext*, CursorInRevision>> imports;
-	
-	foreach( const ReferencedTopDUContext &each, contexts ){
-		imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
-	}
-	top->addImportedParentContexts( imports );
-	
-	return true;
-}
-
 Declaration *Helpers::getInternalTypeDeclaration( const QString &name ){
-	QVector<ReferencedTopDUContext> contexts( getDocumentationFileContexts() );
+	QVector<ReferencedTopDUContext> contexts( ImportPackageLanguage::self()->getContexts() );
 	const Identifier identifier( name );
 	
 	foreach( const ReferencedTopDUContext &context, contexts ){

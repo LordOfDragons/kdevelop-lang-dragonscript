@@ -1,9 +1,9 @@
 #include <QFileDialog>
 
 #include "ProjectConfigPage.h"
-
 #include "ui_projectConfigPage.h"
 #include "../duchain/Helpers.h"
+
 
 namespace DragonScript {
 
@@ -18,8 +18,6 @@ pUI( new Ui_ProjectConfig )
 	
 	pModelPathInclude = new QStringListModel( this );
 	pUI->listPathInclude->setModel( pModelPathInclude );
-	
-	connect( pUI->editPathDSI, SIGNAL(textChanged(const QString &)), this, SLOT(editPathDSIChanged()) );
 	
 	connect( pUI->btnPathIncludeSelect, SIGNAL(clicked()), this, SLOT(btnPathIncludeSelect()) );
 	connect( pUI->btnPathIncludeAdd, SIGNAL(clicked()), this, SLOT(btnPathIncludeAdd()) );
@@ -36,31 +34,24 @@ QString ProjectConfigPage::name() const{
 
 
 void ProjectConfigPage::apply(){
-	pConfigGroup.writeEntry( "pathDSI", pUI->editPathDSI->text() );
 	pConfigGroup.writeEntry( "pathInclude", pModelPathInclude->stringList() );
 	// force reparsing?
 }
 
 void ProjectConfigPage::defaults(){
-	pUI->editPathDSI->setText( QString() );
-	pUI->editPathInclude->setText( QString() );
+	pUI->editPathInclude->setText( "" );
 	pModelPathInclude->removeRows( 0, pModelPathInclude->rowCount() );
 	
 	emit changed();
 }
 
 void ProjectConfigPage::reset(){
-	pUI->editPathDSI->setText( pConfigGroup.readEntry( "pathDSI", "" ) );
 	pModelPathInclude->setStringList( pConfigGroup.readEntry( "pathInclude", QStringList() ) );
 	
 	emit changed();
 }
 
 
-
-void ProjectConfigPage::editPathDSIChanged(){
-	emit changed();
-}
 
 void ProjectConfigPage::btnPathIncludeSelect(){
 	QString path( pUI->editPathInclude->text() );

@@ -8,22 +8,17 @@
 #include <language/interfaces/ilanguagesupport.h>
 #include <language/duchain/topducontext.h>
 
-using KDevelop::ICodeHighlighting;
-using KDevelop::IDocument;
-using KDevelop::ILanguageSupport;
-using KDevelop::IndexedString;
-using KDevelop::IPlugin;
-using KDevelop::ParseJob;
-using KDevelop::ReferencedTopDUContext;
-using KDevelop::SourceFormatterItemList;
-using KDevelop::ConfigPage;
+#include "duchain/ImportPackages.h"
+
+
+using namespace KDevelop;
 
 namespace DragonScript {
 
 class Highlighting;
 
 /**
- * \brief Language support module for DragonScript language.
+ * Language support module for DragonScript language.
  */
 class DSLanguageSupport : public IPlugin, public ILanguageSupport {
 	Q_OBJECT
@@ -33,35 +28,46 @@ private:
 	Highlighting *pHighlighting;
 	static DSLanguageSupport *pSelf;
 	
+	ImportPackages pImportPackages;
+	
 	
 	
 public:
-	/** \brief Create language support. */
+	/** Create language support. */
 	DSLanguageSupport(QObject* parent, const QVariantList& args);
 	
-	/** \brief Clean up language support. */
+	/** Clean up language support. */
 	virtual ~DSLanguageSupport();
 	
 	
 	
-	/** \brief Singleton. */
+	/** Singleton. */
 	inline static DSLanguageSupport *self(){ return pSelf; }
 	
-	/** \brief Name of language.*/
-	virtual QString name() const override;
+	/** Name of language.*/
+	QString name() const override;
 	
-	/** \brief Create parse job used by background parser to parse \p url.*/
-	virtual ParseJob *createParseJob( const IndexedString &url ) override;
+	/** Create parse job used by background parser to parse \p url.*/
+	ParseJob *createParseJob( const IndexedString &url ) override;
 	
-	/** \brief Code highlighting instance. */
+	/** Get the number of available config pages for global settings. */
+	int configPages() const override;
+	
+	/** Get the global config page */
+	ConfigPage *configPage( int number, QWidget *parent ) override;
+	
+	/** Code highlighting instance. */
 	ICodeHighlighting *codeHighlighting() const override;
 	
-	/** \brief Per-project configuration pages. */
+	/** Per-project configuration pages. */
 	int perProjectConfigPages() const override;
 	
-	/** \brief Create per-project configuration page. */
+	/** Create per-project configuration page. */
 	ConfigPage* perProjectConfigPage( int number, const KDevelop::ProjectConfigOptions &options,
 		QWidget *parent ) override;
+	
+	/** Import packages. */
+	inline ImportPackages &importPackages(){ return pImportPackages; }
 };
 
 }

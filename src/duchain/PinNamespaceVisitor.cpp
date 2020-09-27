@@ -58,7 +58,7 @@ void PinNamespaceVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameA
 		iter = iter->next;
 	}while( iter != end );
 	
-	qDebug() << "PinNamespaceVisitor::visitFullyQualifiedClassname:" << names;
+// 	qDebug() << "PinNamespaceVisitor::visitFullyQualifiedClassname:" << names;
 	
 	findNamespaceIn( pContext, nodes, names, 0 );
 }
@@ -72,7 +72,7 @@ const QVector<IdentifierAst*> nodes, const QVector<QString> &names, int index ){
 	QVector<Declaration*> declarations( Helpers::declarationsForName( names.at( index ),
 		CursorInRevision::invalid(), DUChainPointer<const DUContext>( searchContext ) ) );
 	
-	qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index ) << "found" << declarations;
+// 	qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index ) << "found" << declarations;
 	if( declarations.isEmpty() ){
 		//qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index )
 		//	<< "not found in" << searchContext;

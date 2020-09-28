@@ -80,19 +80,31 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			context = nullptr;
 			
 		}else{
+			bool addUse = true;
+			
 			if( context ){
 				decl = Helpers::declarationForName( name, CursorInRevision( INT_MAX, INT_MAX ), context );
 				context = nullptr;
 			}
 			
-			if( ! decl ){
+			if( decl ){
+				if( decl->kind() == Declaration::Kind::Namespace ){
+					// do not add uses for namespaces. they are special in dragonscript
+					// since they are shared and there exists no namespace declaration
+// 					addUse = false;
+				}
+				
+			}else{
 				reportSemanticError( lock, useRange, i18n( "Unknown type: %1", name ) );
 			}
 			
-			lock.unlock();
-			//UseBuilderBase::newUse( iter->element, useRange, DeclarationPointer( decl ) );
-			UseBuilderBase::newUse( useRange, DeclarationPointer( decl ) );
-			lock.lock();
+			if( addUse ){
+				lock.unlock();
+				UseBuilderBase::newUse( iter->element, DeclarationPointer( decl ) );
+// 				UseBuilderBase::newUse( useRange, DeclarationPointer( decl ) );
+				lock.lock();
+			}
+			
 			if( decl ){
 				context = decl->internalContext();
 			}

@@ -125,7 +125,6 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace";
 	closeNamespaceContexts();
 	
-	// for each namespace component add a context
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	
@@ -136,83 +135,12 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		
 		StructureType::Ptr type( new StructureType() );
 		
-// 		AliasDeclaration *aliasDecl = nullptr;
 		ClassDeclaration *decl = nullptr;
 		bool newDecl = false;
-		
-#if 0
-		foreach( Declaration* each, existingDeclarationsForNode( iter->element ) ){
-			decl = dynamic_cast<ClassDeclaration*>( each );
-			if( ! decl ){
-				continue;
-			}
-			
-			if( decl->topContext() != currentContext()->topContext() ){
-				qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace: "
-					<< "Not opening previously existing declaration "
-					<< "because it's in another top context";
-				decl = nullptr;
-				continue;
-			}
-			
-			qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace: "
-				<< "Re-open context" << decl->toString();
-			
-				/*
-			aliasDecl = openDeclaration<AliasDeclaration>(
-				iter->element, iter->element, DeclarationFlags::NoFlags );
-			aliasDecl->setAliasedDeclaration( decl );
-			aliasDecl->setAlwaysForceDirect( true );
-			
-			eventuallyAssignInternalContext();
-			
-			aliasDecl->setKind( KDevelop::Declaration::Namespace );
-			//aliasDecl->setComment(docstring);
-			
-			openAbstractType( decl->abstractType() );
-			//m_currentClassTypes.append( type );
-			
-			openContext( iter->element, range, DUContext::Namespace, iter->element );
-			currentContext()->setLocalScopeIdentifier( identifier );
-			aliasDecl->setInternalContext( currentContext() );
-			*/
-			
-			break;
-			
-			/*
-			if( decl->topContext() == currentContext()->topContext() ){
-				qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace: "
-					<< "Re-open context" << decl->toString();
-				openDeclarationInternal( decl );
-				decl->setRange( range );
-				setEncountered( decl );
-				
-				openAbstractType( decl->abstractType() );
-				
-				openContext( iter->element, range, DUContext::Namespace, iter->element );
-				currentContext()->setLocalScopeIdentifier( identifier );
-				//decl->setInternalContext( currentContext() );
-				
-				break;
-				
-			}else{
-				qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace: "
-					<< "Not opening previously existing declaration "
-					<< "because it's in another top context";
-				decl = nullptr;
-			}
-			*/
-		}
-		
-		if( decl ){
-			continue;
-		}
-#endif
 		
 		if( ! decl ){
 			decl = openDeclaration<ClassDeclaration>( iter->element, iter->element,
 				DeclarationFlags::NoFlags );
-// 			decl->setAlwaysForceDirect( true );
 			newDecl = true;
 			
 			eventuallyAssignInternalContext();
@@ -224,7 +152,6 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 			decl->setType( type );
 			
 			openType( type );
-			//m_currentClassTypes.append( type );
 			
 			openContext( iter->element, range, DUContext::Namespace, iter->element );
 			currentContext()->setLocalScopeIdentifier( identifier );
@@ -247,7 +174,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	
 	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>( node->begin->name,
 		node->begin->name, DeclarationFlags::NoFlags );
-	decl->setAlwaysForceDirect( true );
+// 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 	
 	eventuallyAssignInternalContext();
 	
@@ -359,7 +286,7 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 	do{
 		ClassMemberDeclaration * const decl = openDeclaration<ClassMemberDeclaration>(
 			iter->element->name, iter->element->name, DeclarationFlags::NoFlags );
-		decl->setAlwaysForceDirect( true );
+// 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
 		decl->setKind( KDevelop::Declaration::Instance );
 		decl->setComment( getDocumentationForNode( *node ) );
@@ -413,7 +340,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 		return;
 	}
 	
-	decl->setAlwaysForceDirect( true );
+// 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 	decl->setKind( KDevelop::Declaration::Instance );
 	decl->setStatic( false );  // TODO check type modifiers
 	decl->setComment( getDocumentationForNode( *node ) );
@@ -474,7 +401,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 			
 			Declaration * const declArg = openDeclaration<Declaration>( iter->element->name,
 				iter->element->name, DeclarationFlags::NoFlags );
-			declArg->setAlwaysForceDirect( true );
+// 			declArg->setAlwaysForceDirect( true ); // nobody seems to be using this?
 			declArg->setAbstractType( argType );
 			declArg->setKind( KDevelop::Declaration::Instance );
 			closeDeclaration();
@@ -504,7 +431,7 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	
 	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>( node->begin->name,
 		node->begin->name, DeclarationFlags::NoFlags );
-	decl->setAlwaysForceDirect( true );
+// 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 	
 	eventuallyAssignInternalContext();
 	
@@ -562,7 +489,7 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	
 	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>(
 		node->begin->name, node->begin->name, DeclarationFlags::NoFlags );
-	decl->setAlwaysForceDirect( true );
+// 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 	
 	eventuallyAssignInternalContext();
 	
@@ -606,7 +533,7 @@ void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
 	
 	ClassMemberDeclaration * const decl = openDeclaration<ClassMemberDeclaration>(
 		node->name, node->name, DeclarationFlags::NoFlags );
-	decl->setAlwaysForceDirect( true );
+// 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 	decl->setKind( KDevelop::Declaration::Instance );
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->setAccessPolicy( KDevelop::Declaration::Public );
@@ -643,7 +570,7 @@ void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 			
 			Declaration * const declArg = openDeclaration<Declaration>( iter->element->name,
 				iter->element->name, DeclarationFlags::NoFlags );
-			declArg->setAlwaysForceDirect( true );
+// 			declArg->setAlwaysForceDirect( true ); // nobody seems to be using this?
 			declArg->setAbstractType( argType );
 			declArg->setKind( KDevelop::Declaration::Instance );
 			closeDeclaration();
@@ -867,7 +794,7 @@ void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 		
 		Declaration * const decl = openDeclaration<Declaration>(
 			node->variable, node->variable, DeclarationFlags::NoFlags );
-		decl->setAlwaysForceDirect( true );
+// 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
 		decl->setKind( KDevelop::Declaration::Instance );
 		
@@ -906,7 +833,7 @@ void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDef
 	do{
 		Declaration * const decl = openDeclaration<Declaration>(
 			iter->element->name, iter->element->name, DeclarationFlags::NoFlags );
-		decl->setAlwaysForceDirect( true );
+// 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
 		decl->setKind( KDevelop::Declaration::Instance );
 		

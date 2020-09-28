@@ -30,10 +30,11 @@ const ReferencedTopDUContext& updateContext ){
 	
 	if( updateContext ){
 // 		qDebug() << "KDevDScript: ContextBuilder::build: rebuilding duchain for" << url.str() << "(was built before)";
-		DUChainWriteLocker lock;
 		Q_ASSERT( updateContext->type() == DUContext::Global );
 		updateContext->clearImportedParentContexts();
 		updateContext->parsingEnvironmentFile()->clearModificationRevisions();
+		
+		DUChainWriteLocker lock;
 		updateContext->clearProblems();
 		
 	}else{
@@ -107,20 +108,6 @@ void ContextBuilder::startVisiting( AstNode *node ){
 			}
 		}
 	}
-	
-	/*
-	if( ! pRequiresReparsing ){
-		IProject * const project = ICore::self()->projectController()->findProjectForUrl( document().toUrl() );
-		if( project ){
-			KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
-			const QStringList list( config.readEntry( "pathInclude", QStringList() ) );
-			
-			foreach( const QString &dirname, list ){
-				Helpers::addImportsIncludePath( top, dirname );
-			}
-		}
-	}
-	*/
 	
 	// visit node to start building
 	visitNode( node );

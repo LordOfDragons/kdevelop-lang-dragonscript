@@ -54,6 +54,7 @@ fixed class Enumeration
 	 * \retval >0 Order og object is smaller.
 	 */
 	public func int compare( Object other )
+		return 0
 	end
 	
 	/** \brief Constant order is less than order of other constant. */

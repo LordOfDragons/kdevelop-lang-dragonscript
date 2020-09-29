@@ -57,10 +57,16 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	Q_UNUSED(self)
 	Q_UNUSED(thread)
 	
+// 	const QReadLocker parseLock( languageSupport()->parseLock() );
+	
 	// prepare
 	if( checkAbort() ){
 		return;
 	}
+	
+	// clang module does this claiming it is needed to get all information in all project files
+// 	setMinimumFeatures( static_cast<TopDUContext::Features>(
+// 		minimumFeatures() | TopDUContext::AllDeclarationsContextsAndUses ) );
 	
 	readContents();
 	

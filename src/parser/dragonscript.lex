@@ -154,30 +154,30 @@
 
 	/*** single line comment ***/
 <INITIAL>{
+"//"/(\n|\r|\r\n) { return DragonScript::TokenType::Token_DOC_COMMENT_SINGLELINE; }
 "//"            BEGIN(SINGLELINE_COMMENT);
 }
 <SINGLELINE_COMMENT>{
-[^\n\r]+       // consume comment in chunks
-\\(\n|\r|\r\n)  { YY_NEXT_LINE; }  // line splicing
-(\n|\r|\r\n)    {
-                YY_NEXT_LINE;
+[^\n\r]+/(\n|\r|\r\n) {
                 BEGIN(INITIAL);
                 return DragonScript::TokenType::Token_COMMENT_SINGLELINE;
                 }
+[^\n\r]+       // consume comment in chunks
+\\(\n|\r|\r\n)  { YY_NEXT_LINE; }  // line splicing
 }
 
 	/*** documentation single line comment ***/
 <INITIAL>{
+"//<<!"/(\n|\r|\r\n) { return DragonScript::TokenType::Token_DOC_COMMENT_SINGLELINE; }
 "//<<!"         BEGIN(DOC_SINGLELINE_COMMENT);
 }
 <DOC_SINGLELINE_COMMENT>{
-[^\n\r]+       // consume comment in chunks
-\\(\n|\r|\r\n)  { YY_NEXT_LINE; }  // line splicing
-(\n|\r|\r\n)    {
-                YY_NEXT_LINE;
+[^\n\r]+/(\n|\r|\r\n) {
                 BEGIN(INITIAL);
                 return DragonScript::TokenType::Token_DOC_COMMENT_SINGLELINE;
                 }
+[^\n\r]+       // consume comment in chunks
+\\(\n|\r|\r\n)  { YY_NEXT_LINE; }  // line splicing
 }
 
 	/*** string ***/

@@ -232,7 +232,7 @@ name=IDENTIFIER
 #name=identifier @ PERIOD
 -> fullyQualifiedClassname ;;
 
-COMMAND_SEPARATOR | ?comment=COMMENT_SINGLELINE LINEBREAK
+COMMAND_SEPARATOR | LINEBREAK
 -> endOfCommand ;;
 
 

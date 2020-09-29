@@ -75,7 +75,7 @@ void ContextBuilder::startVisiting( AstNode *node ){
 		
 		// add dragengine import package
 		if( ! pRequiresReparsing ){
-			pRequiresReparsing = ! ImportPackageDragengine::self()->addImports( top );
+// 			pRequiresReparsing = ! ImportPackageDragengine::self()->addImports( top );
 		}
 		
 		// add import package for each project import set by the user

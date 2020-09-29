@@ -11,6 +11,8 @@
 #include <language/duchain/topducontext.h>
 
 #include "DSProjectSettings.h"
+#include "dsp_ast.h"
+#include "ImportPackage.h"
 
 
 using namespace KDevelop;
@@ -26,7 +28,8 @@ class DSParseJob : public ParseJob{
 	
 public:
 	enum {
-		Resheduled = TopDUContext::LastFeature
+		Resheduled = TopDUContext::LastFeature,
+		UpdateUses
 	};
 	
 	explicit DSParseJob( const IndexedString &url, ILanguageSupport *languageSupport );
@@ -35,13 +38,27 @@ public:
 	void setParentJob( DSParseJob *job );
 	
 protected:
-	DSLanguageSupport* ds() const;
 	void run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *thread ) override;
+	
+	bool checkAbort();
+	bool verifyUpdateRequired();
+	void prepareTopContext();
+	void findPackage();
+	void findDependencies();
+	bool ensureDependencies();
+	void reparseLater( int addFeatures = 0 );
+	bool buildDeclaration( EditorIntegrator &editor );
+	bool buildUses( EditorIntegrator &editor );
+	void parseFailed();
+	void finishTopContext();
+	
 	
 private:
 	DSParseJob *pParentJob; ///< parent job if this one is an include
-	ReferencedTopDUContext pDUContext;
 	DSProjectSettings pProjectSettings;
+	StartAst *pStartAst;
+	ImportPackage::Ref pPackage;
+	QVector<ImportPackage::Ref> pDependencies;
 	
 	/**
 	 * Checks if a parent job parses already \p document. Used to prevent

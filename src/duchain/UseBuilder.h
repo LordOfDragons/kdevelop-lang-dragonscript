@@ -9,14 +9,8 @@
 #include "ContextBuilder.h"
 #include "EditorIntegrator.h"
 
-using KDevelop::AbstractUseBuilder;
-using KDevelop::Identifier;
-using KDevelop::Declaration;
-using KDevelop::IndexedString;
-using KDevelop::CursorInRevision;
-using KDevelop::DUContext;
-using KDevelop::DUChainPointer;
-using KDevelop::DUChainReadLocker;
+
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -28,14 +22,14 @@ class KDEVDSDUCHAIN_EXPORT UseBuilder : public UseBuilderBase{
 private:
 	ParseSession &pParseSession;
 	DUChainPointer<const DUContext> pCurExprContext;
-	KDevelop::AbstractType::Ptr pCurExprType;
+	AbstractType::Ptr pCurExprType;
 	bool pEnableErrorReporting;
 	bool pAllowVoidType;
 	
 	
 	
 public:
-	UseBuilder( EditorIntegrator &editor );
+	UseBuilder( EditorIntegrator &editor, const QVector<ImportPackage::Ref> &deps );
 	
 	/** \brief Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }
@@ -76,16 +70,16 @@ protected:
 	/**
 	 * \brief Type of node using ExpressionVisitor.
 	 */
-	KDevelop::AbstractType::Ptr typeOfNode( AstNode *node, DUChainPointer<const DUContext> context );
+	AbstractType::Ptr typeOfNode( AstNode *node, DUChainPointer<const DUContext> context );
 	
 	/**
 	 * \brief Check function call.
 	 */
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-		const KDevelop::AbstractType::Ptr &argument );
+		const AbstractType::Ptr &argument );
 	
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-		const QVector<KDevelop::AbstractType::Ptr> &signature );
+		const QVector<AbstractType::Ptr> &signature );
 	
 	/**
 	 * \brief Report semantic error if reporting is enabled.
@@ -96,7 +90,7 @@ protected:
 	 * \brief Report semantic error if reporting is enabled.
 	 */
 	void reportSemanticError( const RangeInRevision &range, const QString &hint,
-		const QVector<KDevelop::IProblem::Ptr> &diagnostics );
+		const QVector<IProblem::Ptr> &diagnostics );
 	
 	/**
 	 * \brief Report semantic hint if reporting is enabled.

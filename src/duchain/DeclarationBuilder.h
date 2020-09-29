@@ -11,14 +11,8 @@
 #include "duchainexport.h"
 #include "dsp_defaultvisitor.h"
 
-using KDevelop::AbstractTypeBuilder;
-using KDevelop::AbstractDeclarationBuilder;
-using KDevelop::ReferencedTopDUContext;
-using KDevelop::IndexedString;
-using KDevelop::DUContextPointer;
-using KDevelop::DUContext;
-using KDevelop::DUChainPointer;
-using KDevelop::Declaration;
+
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -41,7 +35,8 @@ private:
 	
 	
 public:
-	DeclarationBuilder( EditorIntegrator &editor, int ownPriority, const ParseSession &parseSession );
+	DeclarationBuilder( EditorIntegrator &editor, int ownPriority,
+		const ParseSession &parseSession, const QVector<ImportPackage::Ref> &deps );
 	~DeclarationBuilder() override;
 	
 	/** \brief Entry function, called by KDevPlatform. */
@@ -70,6 +65,7 @@ public:
 	void visitClassVariablesDeclare( ClassVariablesDeclareAst *node ) override;
 	void visitClassFunctionDeclare( ClassFunctionDeclareAst *node ) override;
 	void visitInterface( InterfaceAst *node ) override;
+    void visitInterfaceBodyDeclaration( InterfaceBodyDeclarationAst *node ) override;
 	void visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ) override;
 	void visitEnumeration( EnumerationAst *node ) override;
 	void visitEnumerationBody( EnumerationBodyAst *node ) override;
@@ -89,7 +85,7 @@ public:
 	
 protected:
 	/** \brief Access policy from last modifiers. */
-	KDevelop::ClassMemberDeclaration::AccessPolicy accessPolicyFromLastModifiers() const;
+	ClassMemberDeclaration::AccessPolicy accessPolicyFromLastModifiers() const;
 };
 
 }

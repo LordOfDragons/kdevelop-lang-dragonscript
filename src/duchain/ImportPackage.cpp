@@ -12,6 +12,7 @@
 #include <interfaces/ipartcontroller.h>
 
 #include "ImportPackage.h"
+#include "../DSParseJob.h"
 
 
 using namespace KDevelop;
@@ -19,76 +20,58 @@ using namespace KDevelop;
 namespace DragonScript {
 
 ImportPackage::ImportPackage() :
-pReady( false ),
-pParsing( false ),
-pDebug( true ){
+pMode( Mode::Pending ),
+pDebug( false ){
 }
 
 ImportPackage::ImportPackage( const QString &name, const QVector<IndexedString> &files ) :
 pName( name ),
 pFiles( files ),
-pReady( files.isEmpty() ),
-pParsing( false ),
-pDebug( true ){
+pMode( Mode::Pending ),
+pDebug( false ){
 }
 
 ImportPackage::~ImportPackage(){
 	dropContexts();
 }
 
-QVector<ReferencedTopDUContext> ImportPackage::getContexts(){
-// 	qDebug() << "ImportPackage.getContexts: ready" << pReady;
-	if( pReady ){
-		QVector<ReferencedTopDUContext> contexts;
-		foreach( const ReferencedTopDUContext &context, pContexts ){
-			contexts.append( context );
-		}
-		return contexts;
+const QVector<ReferencedTopDUContext> &ImportPackage::getContexts(){
+	if( ensureReady() ){
+		return pContexts;
 	}
 	
-	BackgroundParser &bgparser = *ICore::self()->languageController()->backgroundParser();
-	DUChain &duchain = *DUChain::self();
-	
-	pContexts.clear();
-	
-	if( pParsing ){
-		DUChainReadLocker lock;
-		foreach( const IndexedString &file, pFiles ){
-			TopDUContext * const context = duchain.chainForDocument( file );
-			if( context ){
-				if( pDebug ){
-					qDebug() << "ImportPackage.getContexts: File ready:" << file;
-				}
-				pContexts.append( ReferencedTopDUContext( context ) );
-				
-			}else{
-				if( pDebug ){
-					qDebug() << "ImportPackage.getContexts: File still parsing:" << file;
-				}
-				pContexts.clear();
-				break;
-			}
-		}
+	static QVector<ReferencedTopDUContext> empty;
+	return empty;
+}
+
+bool ImportPackage::ensureReady(){
+	switch( pMode ){
+	case Mode::Ready:
+		return true;
 		
-	}else{
+	case Mode::Pending:{
+		DUChainReadLocker lock;
 		bool allReady = true;
-		pParsing = true;
+		DUChain &duchain = *DUChain::self();
 		
-		DUChainReadLocker lock;
+		pMode = Mode::Parsing;
+		pContexts.clear();
+		
 		foreach( const IndexedString &file, pFiles ){
 			TopDUContext * const context = duchain.chainForDocument( file );
 			
 			if( context ){
 				if( pDebug ){
-					qDebug() << "ImportPackage.getContexts: File has context:" << file;
+					qDebug() << "ImportPackage.getContexts" << pName << ": File has context:" << file;
 				}
 				pContexts.append( ReferencedTopDUContext( context ) );
 				
 			}else{
 				if( pDebug ){
-					qDebug() << "ImportPackage.getContexts: File has no context, parsing it:" << file;
+					qDebug() << "ImportPackage.getContexts" << pName << ": File has no context, parsing it:" << file;
 				}
-				bgparser.addDocument( file, TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
+				ICore::self()->languageController()->backgroundParser()->addDocument(
+					file, TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
 					0, ParseJob::FullSequentialProcessing );
 				allReady = false;
 			}
@@ -97,36 +80,76 @@ QVector<ReferencedTopDUContext> ImportPackage::getContexts(){
 		if( ! allReady ){
 			pContexts.clear();
 		}
-	}
-	
-	if( ! pContexts.isEmpty() ){
-		if( pDebug ){
-			qDebug() << "ImportPackage.getContexts: All files read";
-		}
+		}break;
 		
-		if( pParsing ){
-			// re-parse all script files. this is required since script files usually
-			// contain inter-script dependencies and the parsing order is undefined.
-			// this reparsing has no effect on the context but will trigger reparsing
-			// of source files once the individual files are updated
-			foreach( const IndexedString &file, pFiles ){
-				bgparser.addDocument( file, TopDUContext::ForceUpdate,
-					BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
+	case Mode::Parsing:{
+		DUChainReadLocker lock;
+		DUChain &duchain = *DUChain::self();
+		
+		pContexts.clear();
+		
+		foreach( const IndexedString &file, pFiles ){
+			TopDUContext * const context = duchain.chainForDocument( file );
+			if( context ){
+				if( pDebug ){
+					qDebug() << "ImportPackage.getContexts" << pName << ": File ready:" << file;
+				}
+				pContexts.append( ReferencedTopDUContext( context ) );
+				
+			}else{
+				if( pDebug ){
+					qDebug() << "ImportPackage.getContexts" << pName << ": File still parsing:" << file;
+				}
+				pContexts.clear();
+				break;
 			}
 		}
 		
-		pParsing = false;
-		pReady = true;
+		if( pContexts.isEmpty() ){
+			break;
+		}
+		
+		if( pDebug ){
+			qDebug() << "ImportPackage.getContexts" << pName << ": All files read";
+		}
+		
+		// re-parse all script files. this is required since script files usually
+		// contain inter-script dependencies and the parsing order is undefined.
+		// this reparsing has no effect on the context but will trigger reparsing
+		// of source files once the individual files are updated
+		BackgroundParser &bgparser = *ICore::self()->languageController()->backgroundParser();
+		const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
+			TopDUContext::VisibleDeclarationsAndContexts
+			| DSParseJob::Resheduled /*| DSParseJob::UpdateUses*/ );
+		
+// 		pMode = Mode::BuildUses;
+		pMode = Mode::Ready;
+		
+		foreach( const IndexedString &file, pFiles ){
+			bgparser.addDocument( file, feat, BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
+		}
+		}break;
+		
+	case Mode::BuildUses:{
+		/*
+		DUChainReadLocker lock;
+		foreach( const ReferencedTopDUContext &each, pContexts ){
+			if( ! ( each->features() & DSParseJob::UpdateUses ) ){
+				return false;
+			}
+		}
+		*/
+		pMode = Mode::Ready;
+		}return true;
 	}
 	
-	return {};
+	return false;
 }
 
 bool ImportPackage::addImports( TopDUContext *context ){
-	const QVector<ReferencedTopDUContext> contexts( getContexts() );
-	if( ! pReady ){
+	if( ! ensureReady() ){
 		if( pDebug ){
-			qDebug() << "ImportPackage.addImports: Not all contexts ready yet.";
+			qDebug() << "ImportPackage.addImports" << pName << ": Not all contexts ready yet.";
 		}
 		return false;
 	}
@@ -134,7 +157,7 @@ bool ImportPackage::addImports( TopDUContext *context ){
 	DUChainWriteLocker lock;
 	QVector<QPair<TopDUContext*, CursorInRevision>> imports;
 	
-	foreach( const ReferencedTopDUContext &each, contexts ){
+	foreach( const ReferencedTopDUContext &each, pContexts ){
 		imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
 	}
 	context->addImportedParentContexts( imports );
@@ -145,8 +168,7 @@ bool ImportPackage::addImports( TopDUContext *context ){
 void ImportPackage::dropContexts(){
 	DUChainWriteLocker lock;
 	pContexts.clear();
-	pReady = false;
-	pParsing = false;
+	pMode = Mode::Pending;
 }
 
 }

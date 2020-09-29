@@ -28,179 +28,104 @@
 #include "DSLanguageSupport.h"
 #include "DSSessionSettings.h"
 #include "dsp_debugvisitor.h"
-#include "duchain/DeclarationBuilder.h"
-#include "duchain/EditorIntegrator.h"
-#include "duchain/DumpChain.h"
-#include "duchain/UseBuilder.h"
-#include "duchain/Helpers.h"
+#include "DeclarationBuilder.h"
+#include "EditorIntegrator.h"
+#include "DumpChain.h"
+#include "UseBuilder.h"
+#include "Helpers.h"
+#include "ImportPackageLanguage.h"
+#include "ImportPackageDragengine.h"
+#include "ImportPackageDirectory.h"
 
-using KDevelop::DocumentRange;
-using KDevelop::DUChain;
-using KDevelop::DUChainReadLocker;
-using KDevelop::DUChainWriteLocker;
-using KDevelop::DUContext;
-using KDevelop::ICore;
-using KDevelop::ParsingEnvironmentFile;
-using KDevelop::ParsingEnvironmentFilePointer;
-using KDevelop::Problem;
-using KDevelop::RangeInRevision;
-using KDevelop::UrlParseLock;
-using KDevelop::DUChainUtils::standardContextForUrl;
 
-static const IndexedString languageString( "DragonScript" );
+using namespace KDevelop;
 
 namespace DragonScript{
+
+static const IndexedString languageString( "DragonScript" );
 
 DSParseJob::DSParseJob( const IndexedString &url, ILanguageSupport *languageSupport ) :
 ParseJob( url, languageSupport ),
 pParentJob( nullptr ),
-pDUContext( nullptr ){
+pStartAst( nullptr ){
 }
 
 DSParseJob::~DSParseJob(){
-}
-
-DSLanguageSupport* DSParseJob::ds() const{
-	return dynamic_cast<DSLanguageSupport*>( languageSupport() );
 }
 
 void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *thread ){
 	Q_UNUSED(self)
 	Q_UNUSED(thread)
 	
-	if( abortRequested() || ICore::self()->shuttingDown() ){
-		abortJob();
+	// prepare
+	if( checkAbort() ){
 		return;
 	}
 	
-	ProblemPointer p = readContents();
+	readContents();
 	
-	if( ! ( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) ) && ! isUpdateRequired( languageString ) ){
-		DUChainReadLocker lock;
-		foreach( const ParsingEnvironmentFilePointer &file, DUChain::self()->allEnvironmentFiles( document() ) ){
-			if( file->language() != languageString ){
-				continue;
-			}
-			
-			if( ! file->needsUpdate() && file->featuresSatisfied( minimumFeatures() ) && file->topContext() ){
-// 				qDebug() << "KDevDScript: DSParseJob::run: Already up to date" << document().str();
-				setDuChain( file->topContext() );
-				if( ICore::self()->languageController()->backgroundParser()->trackerForUrl( document() ) ){
-					lock.unlock();
-					highlightDUChain();
-				}
+	if( verifyUpdateRequired() ){
+// 		qDebug() << "DSParseJob.run: no update required for" << document();
+		return;
+	}
+	
+	prepareTopContext();
+	
+	// parse document
+	ParseSession session( document(), contents().contents );
+	//session.setDebug( true );
+	
+	pStartAst = nullptr;
+	if( session.parse( &pStartAst ) ){
+		if( checkAbort() ){
+			return;
+		}
+		
+		// dragonscript works a bit different than other languages. script files always
+		// belong to a namespace and all files in the namespace are visible without
+		// needing an import statement. this requires parsing and declaration building
+		// to be done for all files in a package before uses can be build
+		findPackage();
+		findDependencies();
+		
+		if( ! ensureDependencies() ){
+			reparseLater();
+			return;
+		}
+		if( checkAbort() ){
+			return;
+		}
+		
+// 		qDebug() << "DSParseJob.run: dependencies ready for" << document();
+		EditorIntegrator editor( session );
+		
+		if( ! buildDeclaration( editor ) ){
+			reparseLater();
+			return;
+		}
+		if( checkAbort() ){
+			return;
+		}
+		
+		//if( ( minimumFeatures() & UpdateUses ) || ! pPackage ){
+			// for packages wait until all files finished building declarations.
+			// we will be triggered again once this happens to update uses
+			if( ! buildUses( editor ) ){
+				reparseLater();
 				return;
 			}
-			break;
-		}
-	}
-// 	qDebug() << "KDevDScript: DSParseJob::run: parsing" << document().str();
-	
-	ReferencedTopDUContext toUpdate;
-	{
-		DUChainReadLocker lock;
-		toUpdate = standardContextForUrl( document().toUrl() );
-	}
-	if( toUpdate ){
-		translateDUChainToRevision( toUpdate );
-		toUpdate->setRange( RangeInRevision( 0, 0, INT_MAX, INT_MAX ) );
-	}
-	
-	ParseSession session( document(), contents().contents );
-// 	session.setDebug( true );
-	
-	StartAst *ast = nullptr;
-	bool matched = session.parse( &ast );
-	
-	if( abortRequested() || ICore::self()->shuttingDown() ){
-		abortJob();
-		return;
-	}
-	
-// 	QReadLocker parselock( languageSupport()->parseLock() );
-// 	UrlParseLock urlLock( document() );
-	
-	EditorIntegrator editor( session );
-	
-	if( matched ){
-		// set up the declaration builder, it gets the parsePriority so it can re-schedule imported files with a better priority
-		DeclarationBuilder builder( editor, parsePriority(), session );
-		
-		pDUContext = builder.build( document(), ast, toUpdate );
-		
-		if( builder.requiresReparsing() ){
-// 			qDebug() << "KDevDScript: DSParseJob::run: Reschedule file" << document().str() << "for parsing";
-			abortJob();
-			const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
-					minimumFeatures() | TopDUContext::VisibleDeclarationsAndContexts | Resheduled );
-			ICore::self()->languageController()->backgroundParser()->addDocument( document(),
-				feat, parsePriority(), nullptr, DSParseJob::FullSequentialProcessing, 500 );
-			return;
-		}
-		
-// 		DumpChain().dump( pDUContext );
-		if( abortRequested() || ICore::self()->shuttingDown() ) {
-			abortJob();
-			return;
-		}
-		
-		setDuChain( pDUContext );
-		
-		// gather uses of variables and functions on the document
-		UseBuilder usebuilder( editor );
-		usebuilder.buildUses( ast );
-		
-		// some internal housekeeping work
-		{
-		DUChainWriteLocker lock;
-		pDUContext->setFeatures( minimumFeatures() );
-		ParsingEnvironmentFilePointer parsingEnvironmentFile = pDUContext->parsingEnvironmentFile();
-		if( parsingEnvironmentFile ){
-			parsingEnvironmentFile->setModificationRevision( contents().modification );
-			DUChain::self()->updateContextEnvironment( pDUContext, parsingEnvironmentFile.data() );
-		}
-		}
-		
-// 		qDebug() << "KDevDScript: DSParseJob::run: Parsing succeeded" << document().str();
-		
-		if( abortRequested() || ICore::self()->shuttingDown() ){
-			abortJob();
-			return;
-		}
-		
-		// start the code highlighter if parsing was successful.
-		highlightDUChain();
+			if( checkAbort() ){
+				return;
+			}
+			
+			highlightDUChain();
+		//}
 		
 	}else{
-// 		qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
-		
-		DUChainWriteLocker lock;
-		pDUContext = toUpdate;
-		// if there's already a chain for the document, do some cleanup.
-		if( pDUContext ){
-			ParsingEnvironmentFilePointer parsingEnvironmentFile = pDUContext->parsingEnvironmentFile();
-			if( parsingEnvironmentFile ){
-				//parsingEnvironmentFile->clearModificationRevisions(); // TODO why?
-				parsingEnvironmentFile->setModificationRevision( contents().modification );
-			}
-			pDUContext->clearProblems();
-			
-		// otherwise, create a new, empty top context for the file. This serves as a placeholder until
-		// the syntax is fixed; for example, it prevents the document from being reparsed again until it is modified.
-		}else{
-			ParsingEnvironmentFile * const file = new ParsingEnvironmentFile( document() );
-			file->setLanguage( languageString );
-			pDUContext = new TopDUContext( document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file );
-			pDUContext->setType( DUContext::Global );
-			DUChain::self()->addDocumentChain( pDUContext );
-			Q_ASSERT( pDUContext->type() == DUContext::Global );
-		}
-		
-		setDuChain( pDUContext );
+		parseFailed();
 	}
 	
-	if( abortRequested() || ICore::self()->shuttingDown() ){
-		abortJob();
+	if( checkAbort() ){
 		return;
 	}
 	
@@ -208,20 +133,214 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	{
 	DUChainWriteLocker lock;
 	foreach( const ProblemPointer &p, session.problems() ){
-		pDUContext->addProblem( p );
+		duChain()->addProblem( p );
 	}
 	}
 	
-	if( minimumFeatures() & TopDUContext::AST ){
-// 		DUChainWriteLocker lock;
-		//m_currentSession->ast = m_ast; // ??
-		//pDUContext->setAst( QExplicitlySharedDataPointer<IAstContainer>( session.data() ) ); ??
-	}
-	
-	setDuChain( pDUContext );
+	finishTopContext();
 	
 	DUChain::self()->emitUpdateReady( document(), duChain() );
-// 	qDebug() << "KDevDScript: DSParseJob::run: emitUpdateReady" << document().str();
+}
+
+bool DSParseJob::checkAbort(){
+	if( abortRequested() || ICore::self()->shuttingDown() ){
+		abortJob();
+		return true;
+	}
+	return false;
+}
+
+bool DSParseJob::verifyUpdateRequired(){
+	if( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) ){
+		return false;
+	}
+	
+	{
+	const UrlParseLock parseLock( document() );
+	if( isUpdateRequired( languageString ) ){
+		return false;
+	}
+	}
+	
+	DUChainWriteLocker lock;
+	foreach( const ParsingEnvironmentFilePointer &file, DUChain::self()->allEnvironmentFiles( document() ) ){
+		if( file->language() != languageString ){
+			continue;
+		}
+		
+		if( ! file->needsUpdate() && file->featuresSatisfied( minimumFeatures() ) && file->topContext() ){
+			setDuChain( file->topContext() );
+			if( ICore::self()->languageController()->backgroundParser()->trackerForUrl( document() ) ){
+				lock.unlock();
+				highlightDUChain();
+			}
+			return true;
+		}
+		break;
+	}
+	
+	return false;
+}
+
+void DSParseJob::prepareTopContext(){
+	DUChainWriteLocker lock;
+	setDuChain( DUChainUtils::standardContextForUrl( document().toUrl() ) );
+	
+	if( duChain() ){
+		lock.unlock(); // due to translateDUChainToRevision
+		translateDUChainToRevision( duChain() );
+		lock.lock();
+		
+		duChain()->setRange( RangeInRevision( 0, 0, INT_MAX, INT_MAX ) );
+	}
+}
+
+void DSParseJob::findPackage(){
+	// find the package the source file belongs to. if the package can be found then
+	// this file is parsed as a dependency of some other file. if the package can not
+	// be found then this is a project file to be parsed
+	pPackage = DSLanguageSupport::self()->importPackages().packageContaining( document() );
+}
+
+void DSParseJob::findDependencies(){
+	ImportPackages &importPackages = DSLanguageSupport::self()->importPackages();
+	
+	pDependencies.clear();
+	
+	// if the file belongs to a package add the dependencies of the package
+	if( pPackage ){
+		pDependencies << pPackage->dependsOn();
+		return;
+	}
+	
+	// otherwise this is a project document
+	
+	// add language import package
+	pDependencies << ImportPackageLanguage::self();
+	
+	// add dragengine import package
+	pDependencies << ImportPackageDragengine::self();
+	
+	// add import package for each project import set by the user
+	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document().toUrl() );
+	if( ! project ){
+		return;
+	}
+	
+	/*
+	const KSharedConfigPtr config( project->projectConfiguration() );
+	foreach( const QString &each, config->additionalConfigSources() ){
+		qDebug() << "KDevDScript ContextBuilder: additional config sources" << each;
+	}
+	*/
+	
+	const KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
+	const QStringList list( config.readEntry( "pathInclude", QStringList() ) );
+	
+	foreach( const QString &dir, list ){
+		const QString name( QString( "#dir#" ) + dir );
+		ImportPackage::Ref package( importPackages.packageNamed( name ) );
+		if( ! package ){
+			package = ImportPackage::Ref( new ImportPackageDirectory( name, dir ) );
+			importPackages.addPackage( package );
+		}
+		pDependencies << package;
+	}
+}
+
+bool DSParseJob::ensureDependencies(){
+	// make sure all required packages have been parsed and prepared
+	bool ready = true;
+	foreach( const ImportPackage::Ref &each, pDependencies ){
+		if( ! each->ensureReady() ){
+// 			qDebug() << "DSParseJob.run: depdendy" << each->name() << "not ready for" << document();
+			ready = false;
+		}
+	}
+	return ready;
+}
+
+void DSParseJob::reparseLater( int addFeatures ){
+	abortJob();
+	
+	const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
+			minimumFeatures() | TopDUContext::VisibleDeclarationsAndContexts
+			| Resheduled | addFeatures );
+	ICore::self()->languageController()->backgroundParser()->addDocument( document(),
+		feat, parsePriority(), nullptr, DSParseJob::FullSequentialProcessing, 500 );
+}
+
+bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
+// 	qDebug() << "DSParseJob.run: build declarations for " << document();
+	if( duChain() ){
+		DUChainWriteLocker lock;
+		duChain()->clearImportedParentContexts();
+		duChain()->parsingEnvironmentFile()->clearModificationRevisions();
+		duChain()->clearProblems();
+	}
+	
+	DeclarationBuilder builder( editor, parsePriority(), editor.session(), pDependencies );
+	setDuChain( builder.build( document(), pStartAst, duChain() ) );
+	
+// 	DumpChain().dump( pDUContext );
+	return ! builder.requiresRebuild();
+}
+
+bool DSParseJob::buildUses( EditorIntegrator &editor ){
+// 	qDebug() << "DSParseJob.run: build uses for " << document();
+	// gather uses of variables and functions on the document
+	UseBuilder usebuilder( editor, pDependencies );
+	usebuilder.buildUses( pStartAst );
+	
+	if( usebuilder.requiresRebuild() ){
+		return false;
+	}
+	
+	// some internal housekeeping work
+	DUChainWriteLocker lock;
+	duChain()->setFeatures( minimumFeatures() );
+	ParsingEnvironmentFilePointer parsingEnvironmentFile = duChain()->parsingEnvironmentFile();
+	if( parsingEnvironmentFile ){
+		parsingEnvironmentFile->setModificationRevision( contents().modification );
+		DUChain::self()->updateContextEnvironment( duChain(), parsingEnvironmentFile.data() );
+	}
+	
+	return true;
+}
+
+void DSParseJob::parseFailed(){
+//	qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
+	DUChainWriteLocker lock;
+	// if there's already a chain for the document, do some cleanup.
+	if( duChain() ){
+		ParsingEnvironmentFilePointer parsingEnvironmentFile = duChain()->parsingEnvironmentFile();
+		if( parsingEnvironmentFile ){
+			//parsingEnvironmentFile->clearModificationRevisions();
+			parsingEnvironmentFile->setModificationRevision( contents().modification );
+		}
+		duChain()->clearProblems();
+		
+	// otherwise, create a new, empty top context for the file. This serves as a
+	// placeholder until the syntax is fixed; for example, it prevents the document
+	// from being reparsed again until it is modified.
+	}else{
+		ParsingEnvironmentFile * const file = new ParsingEnvironmentFile( document() );
+		file->setLanguage( languageString );
+		ReferencedTopDUContext context = new TopDUContext( document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file );
+		context->setType( DUContext::Global );
+		DUChain::self()->addDocumentChain( context );
+		setDuChain( context );
+	}
+}
+
+void DSParseJob::finishTopContext(){
+	/*
+	if( minimumFeatures() & TopDUContext::AST ){
+		DUChainWriteLocker lock;
+		//m_currentSession->ast = m_ast; // ??
+		duChain()->setAst( QExplicitlySharedDataPointer<IAstContainer>( session.data() ) ); ??
+	}
+	*/
 }
 
 void DSParseJob::setParentJob( DSParseJob *job ){

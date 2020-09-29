@@ -19,12 +19,12 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-UseBuilder::UseBuilder( EditorIntegrator &editor ) :
-UseBuilderBase(),
+UseBuilder::UseBuilder( EditorIntegrator &editor, const QVector<ImportPackage::Ref> &deps ) :
 pParseSession( *editor.parseSession() ),
 pEnableErrorReporting( true ),
 pAllowVoidType( false )
 {
+	setDependencies( deps );
 	setEditor( &editor );
 }
 

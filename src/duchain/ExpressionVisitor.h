@@ -21,14 +21,8 @@
 #include "EditorIntegrator.h"
 #include "Helpers.h"
 
-using KDevelop::Identifier;
-using KDevelop::DUContext;
-using KDevelop::DUChainPointer;
-using KDevelop::FunctionDeclaration;
-using KDevelop::DynamicLanguageExpressionVisitor;
-using KDevelop::TypePtr;
-using KDevelop::QualifiedIdentifier;
-using KDevelop::AbstractType;
+
+using namespace KDevelop;
 
 namespace DragonScript {
 

@@ -7,15 +7,10 @@
 
 #include "dsp_defaultvisitor.h"
 #include "duchainexport.h"
+#include "ImportPackage.h"
 
-using KDevelop::AbstractContextBuilder;
-using KDevelop::DUContext;
-using KDevelop::IndexedString;
-using KDevelop::ParsingEnvironmentFile;
-using KDevelop::QualifiedIdentifier;
-using KDevelop::RangeInRevision;
-using KDevelop::ReferencedTopDUContext;
-using KDevelop::TopDUContext;
+
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -32,18 +27,8 @@ class KDEVDSDUCHAIN_EXPORT ContextBuilder : public ContextBuilderBase, public De
 private:
 	EditorIntegrator *pEditor = nullptr;
 	int pNamespaceContextCount = 0;
-	bool pRequiresReparsing = false;
-	
-	
-	
-public:
-	/**
-	 * \deprecated Class member required by older kdevelop template classes.
-	 * 
-	 * Is only used in one place as a boolean value so most probably a left-over.
-	 * Has to be false to not trigger anything.
-	 */
-	bool m_mapAst = false;
+	QVector<ImportPackage::Ref> pDependencies;
+	bool pRequiresRebuild = false;
 	
 	
 	
@@ -53,19 +38,13 @@ public:
 	EditorIntegrator *editor() const{ return pEditor; }
 	void setEditor( EditorIntegrator *editor );
 	
-	/** \brief Entry function called by KDevPlatform API. */
-	ReferencedTopDUContext build( const IndexedString& url, AstNode* node,
-		const ReferencedTopDUContext& updateContext = ReferencedTopDUContext() ) override;
+	inline const QVector<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
+	void setDependencies( const QVector<ImportPackage::Ref> &deps );
+	
+	inline bool requiresRebuild() const{ return pRequiresRebuild; }
+	void setRequiresRebuild( bool failed );
 	
 	void startVisiting( AstNode *node ) override;
-	
-	/**
-	 * \brief Requires reparsing.
-	 * 
-	 * Set after build() is called to signal some information is missing and a reparsing
-	 * should be done to obtain correct results.
-	 */
-	inline bool requiresReparsing() const{ return pRequiresReparsing; }
 	
 	/** \brief Close namespace contexts. */
 	void closeNamespaceContexts();

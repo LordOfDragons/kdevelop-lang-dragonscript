@@ -361,7 +361,7 @@ INTERFACE name=identifier
 FUNC begin=classFunctionDeclareBegin
 -> interfaceFunctionDeclare ;;
 
-#modifiers=typeModifier*
+[: pLastTypeModifiers = 0; :] #modifiers=typeModifier*
 	( aclass=class
 	| interface=interface
 	| enumeration=enumeration
@@ -369,7 +369,7 @@ FUNC begin=classFunctionDeclareBegin
 	)
 -> interfaceBodyDeclaration ;;
 
-interfaceBodyDeclaration | empty=endOfCommand
+declaration=interfaceBodyDeclaration | empty=endOfCommand
 -> interfaceBody ;;
 
 END endOfCommand

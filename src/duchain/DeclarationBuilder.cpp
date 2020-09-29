@@ -22,13 +22,14 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor,
-	int ownPriority, const ParseSession &parseSession ) :
+DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor, int ownPriority,
+	const ParseSession &parseSession, const QVector<ImportPackage::Ref> &deps ) :
 DeclarationBuilderBase(),
 pParseSession( parseSession )
 {
 	Q_UNUSED( ownPriority );
 	
+	setDependencies( deps );
 	setEditor( &editor );
 }
 
@@ -465,6 +466,15 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	decl->setClassModifier( ClassDeclarationData::Abstract );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
+	// set object as base class
+	const AbstractType::Ptr typeObject = Helpers::getTypeObject();
+	if( typeObject ){
+		BaseClassInstance base;
+		base.baseClass = typeObject->indexed();
+		base.access = Declaration::Public;
+		decl->addBaseClass( base );
+	}
+	
 	// add interfaces
 	if( node->begin->implementsSequence ){
 		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
@@ -500,6 +510,11 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	closeContext();
 	closeType();
 	closeDeclaration();
+}
+
+void DeclarationBuilder::visitInterfaceBodyDeclaration( InterfaceBodyDeclarationAst *node ){
+	pLastModifiers = 0;
+	DeclarationBuilderBase::visitInterfaceBodyDeclaration( node );
 }
 
 void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ){

@@ -17,19 +17,8 @@
 
 #include "../parser/ParseSession.h"
 
-using KDevelop::AbstractType;
-using KDevelop::AliasDeclaration;
-using KDevelop::ClassDeclaration;
-using KDevelop::DUChainWriteLocker;
-using KDevelop::FunctionType;
-using KDevelop::Identifier;
-using KDevelop::NamespaceAliasDeclaration;
-using KDevelop::StructureType;
-using KDevelop::BaseClassInstance;
-using KDevelop::DUChainReadLocker;
-using KDevelop::ClassMemberDeclaration;
-using KDevelop::ClassFunctionDeclaration;
 
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -65,8 +54,6 @@ DeclarationBuilder::~DeclarationBuilder(){
 void DeclarationBuilder::closeNamespaceContexts(){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::closeNamespaceContexts" << pNamespaceContexts.size();
 	// for each namespace component add a context
-	DUChainWriteLocker lock;
-	
 	while( ! pNamespaceContexts.isEmpty() ){
 		if( pNamespaceContexts.last() ){
 			closeContext();
@@ -103,18 +90,63 @@ void DeclarationBuilder::visitScriptDeclaration( ScriptDeclarationAst *node ){
 }
 
 void DeclarationBuilder::visitPin( PinAst *node ){
-	DUChainReadLocker lock;
-	
-	PinNamespaceVisitor pinvisitor( *editor(), currentContext() );
-	if( node->name ){
-		pinvisitor.visitFullyQualifiedClassname( node->name );
-		
-		const QVector<DUChainPointer<const DUContext>> &namespaces = pinvisitor.namespaces();
-		foreach( const DUChainPointer<const DUContext> &each, namespaces ){
-// 			qDebug() << "KDevDScript: DeclarationBuilder::visitPin add" << each.operator->();
-			pPinned.append( each );
-		}
+	if( ! node->name->nameSequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
+	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	QualifiedIdentifier identifier;
+	
+	do{
+		identifier += Identifier( editor()->tokenText( *iter->element ) );
+		iter = iter->next;
+	}while( iter != end );
+	
+	const RangeInRevision range( editorFindRangeNode( node->name ) );
+	NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
+		globalImportIdentifier(), range, DeclarationFlags::NoFlags );
+	eventuallyAssignInternalContext();
+	decl->setKind( Declaration::NamespaceAlias );
+	decl->setImportIdentifier( identifier );
+	openContext( iter->element, range, DUContext::Namespace, iter->element );
+	currentContext()->setLocalScopeIdentifier( identifier );
+	decl->setInternalContext( currentContext() );
+	closeContext();
+	
+#if 0
+	do{
+		NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
+			iter->element, iter->element, DeclarationFlags::NoFlags );
+		eventuallyAssignInternalContext();
+		decl->setKind( Declaration::NamespaceAlias );
+		decl->setComment( getDocumentationForNode( *node ) );
+		openContext( iter->element, editorFindRangeNode( iter->element ), DUContext::Namespace, iter->element );
+		currentContext()->setLocalScopeIdentifier( identifierForNode( iter->element ) );
+		decl->setInternalContext( currentContext() );
+		closeCount++;
+	}while( iter != end );
+	
+	while( closeCount-- > 0 ){
+		closeContext();
+	}
+#endif
+	
+#if 0
+	DUChainReadLocker lock;
+	PinNamespaceVisitor pinvisitor( *editor(), currentContext() );
+	if( ! node->name ){
+		return;
+	}
+	
+	pinvisitor.visitFullyQualifiedClassname( node->name );
+	
+	const QVector<DUChainPointer<const DUContext>> &namespaces = pinvisitor.namespaces();
+	foreach( const DUChainPointer<const DUContext> &each, namespaces ){
+//		qDebug() << "KDevDScript: DeclarationBuilder::visitPin add" << each.operator->();
+		pPinned.append( each );
+	}
+#endif
 }
 
 void DeclarationBuilder::visitRequires( RequiresAst *node ){
@@ -128,24 +160,19 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	
-	DUChainWriteLocker lock;
 	do{
-		const RangeInRevision range( editorFindRangeNode( iter->element ) );
-		QualifiedIdentifier identifier( identifierForNode( iter->element ) );
-		
 		StructureType::Ptr type( new StructureType() );
 		
 		ClassDeclaration *decl = nullptr;
 		bool newDecl = false;
 		
 		if( ! decl ){
-			decl = openDeclaration<ClassDeclaration>( iter->element, iter->element,
-				DeclarationFlags::NoFlags );
+			decl = openDeclaration<ClassDeclaration>( iter->element, iter->element, DeclarationFlags::NoFlags );
 			newDecl = true;
 			
 			eventuallyAssignInternalContext();
 			
-			decl->setKind( KDevelop::Declaration::Namespace );
+			decl->setKind( Declaration::Namespace );
 			decl->setComment( getDocumentationForNode( *node ) );
 			
 			type->setDeclaration( decl );
@@ -153,8 +180,9 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 			
 			openType( type );
 			
-			openContext( iter->element, range, DUContext::Namespace, iter->element );
-			currentContext()->setLocalScopeIdentifier( identifier );
+			openContext( iter->element, editorFindRangeNode( iter->element ), DUContext::Namespace, iter->element );
+			
+			currentContext()->setLocalScopeIdentifier( identifierForNode( iter->element ) );
 			decl->setInternalContext( currentContext() );
 		}
 		
@@ -168,8 +196,6 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 void DeclarationBuilder::visitClass( ClassAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitClass";
 	
-	DUChainWriteLocker lock;
-	
 	StructureType::Ptr type( new StructureType() );
 	
 	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>( node->begin->name,
@@ -178,33 +204,34 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	
 	eventuallyAssignInternalContext();
 	
-	decl->setKind( KDevelop::Declaration::Type );
+	decl->setKind( Declaration::Type );
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->clearBaseClasses();
-	decl->setClassType( KDevelop::ClassDeclarationData::Class );
+	decl->setClassType( ClassDeclarationData::Class );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
 	if( ( pLastModifiers & etmFixed ) == etmFixed ){
-		decl->setClassModifier( KDevelop::ClassDeclarationData::Final );
+		decl->setClassModifier( ClassDeclarationData::Final );
 		
 	}else if( ( pLastModifiers & etmAbstract ) == etmAbstract ){
-		decl->setClassModifier( KDevelop::ClassDeclarationData::Abstract );
+		decl->setClassModifier( ClassDeclarationData::Abstract );
 		
 	}else{
-		decl->setClassModifier( KDevelop::ClassDeclarationData::None );
+		decl->setClassModifier( ClassDeclarationData::None );
 	}
 	
 	// add base class and interfaces
 	if( node->begin->extends ){
+		DUChainReadLocker lock;
 		ExpressionVisitor exprvisitor( *editor(), currentContext() );
 		exprvisitor.visitNode( node->begin->extends );
 		
 		if( exprvisitor.lastType()
-		&& exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+		&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 			const StructureType::Ptr baseType = exprvisitor.lastType().cast<StructureType>();
 			BaseClassInstance base;
 			base.baseClass = baseType->indexed();
-			base.access = KDevelop::Declaration::Public;
+			base.access = Declaration::Public;
 			decl->addBaseClass( base );
 		}
 		
@@ -215,7 +242,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 		if( typeObject ){
 			BaseClassInstance base;
 			base.baseClass = typeObject->indexed();
-			base.access = KDevelop::Declaration::Public;
+			base.access = Declaration::Public;
 			decl->addBaseClass( base );
 		}
 	}
@@ -223,15 +250,16 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	if( node->begin->implementsSequence ){
 		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
 		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
+		DUChainReadLocker lock;
 		do{
 			ExpressionVisitor exprvisitor( *editor(), currentContext() );
 			exprvisitor.visitNode( iter->element );
 			if( exprvisitor.lastType()
-			&& exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+			&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 				StructureType::Ptr baseType = exprvisitor.lastType().cast<StructureType>();
 				BaseClassInstance base;
 				base.baseClass = baseType->indexed();
-				base.access = KDevelop::Declaration::Public;
+				base.access = Declaration::Public;
 				decl->addBaseClass( base );
 			}
 			iter = iter->next;
@@ -247,9 +275,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	openContextClass( node );
 	decl->setInternalContext( currentContext() );
 	
-	lock.unlock();
 	DeclarationBuilderBase::visitClass( node );
-	lock.lock();
 	
 	closeContext();
 	closeType();
@@ -266,19 +292,19 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 		return;
 	}
 	
-	DUChainWriteLocker lock;
-	
+	DUChainReadLocker lock;
 	ExpressionVisitor exprType( *editor(), currentContext() );
 	exprType.visitNode( node->type );
 	AbstractType::Ptr type( exprType.lastType() );
+	lock.unlock();
 	
-	KDevelop::ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
+	ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
 	if( ( pLastModifiers & etmStatic ) == etmStatic ){
-		storageSpecifiers |= KDevelop::ClassMemberDeclaration::StaticSpecifier;
+		storageSpecifiers |= ClassMemberDeclaration::StaticSpecifier;
 	}
 	if( ( pLastModifiers & etmFixed ) == etmFixed ){
 		// NOTE existing in an older version of KDevelop but now gone... damn it!
-// 		storageSpecifiers |= KDevelop::ClassMemberDeclaration::FinalSpecifier;
+// 		storageSpecifiers |= ClassMemberDeclaration::FinalSpecifier;
 	}
 	
 	const KDevPG::ListNode<ClassVariableDeclareAst*> *iter = node->variablesSequence->front();
@@ -288,7 +314,7 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 			iter->element->name, iter->element->name, DeclarationFlags::NoFlags );
 // 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
-		decl->setKind( KDevelop::Declaration::Instance );
+		decl->setKind( Declaration::Instance );
 		decl->setComment( getDocumentationForNode( *node ) );
 		decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 		decl->setStorageSpecifiers( storageSpecifiers );
@@ -306,8 +332,6 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 }
 
 void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *node ){
-	DUChainWriteLocker lock;
-	
 	ClassFunctionDeclaration *decl;
 	
 	if( node->begin->name ){
@@ -341,37 +365,38 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	}
 	
 // 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
-	decl->setKind( KDevelop::Declaration::Instance );
+	decl->setKind( Declaration::Instance );
 	decl->setStatic( false );  // TODO check type modifiers
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
-	KDevelop::ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
-	//storageSpecifiers |= KDevelop::ClassMemberDeclaration::AbstractSpecifier; // virtual?
+	ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
+	//storageSpecifiers |= ClassMemberDeclaration::AbstractSpecifier; // virtual?
 	if( ( pLastModifiers & etmNative ) == etmNative ){
 		// NOTE existing in an older version of KDevelop but now gone... damn it!
-// 		storageSpecifiers |= KDevelop::ClassMemberDeclaration::NativeSpecifier;
+// 		storageSpecifiers |= ClassMemberDeclaration::NativeSpecifier;
 	}
 	if( ( pLastModifiers & etmStatic ) == etmStatic ){
-		storageSpecifiers |= KDevelop::ClassMemberDeclaration::StaticSpecifier;
+		storageSpecifiers |= ClassMemberDeclaration::StaticSpecifier;
 	}
 	if( ( pLastModifiers & etmFixed ) == etmFixed ){
 		// NOTE existing in an older version of KDevelop but now gone... damn it!
-// 		storageSpecifiers |= KDevelop::ClassMemberDeclaration::FinalSpecifier;
+// 		storageSpecifiers |= ClassMemberDeclaration::FinalSpecifier;
 	}
 	if( ( pLastModifiers & etmAbstract ) == etmAbstract ){
 		// NOTE existing in an older version of KDevelop but now gone... damn it!
-// 		storageSpecifiers |= KDevelop::ClassMemberDeclaration::AbstractSpecifier; // pure virtual ?
+// 		storageSpecifiers |= ClassMemberDeclaration::AbstractSpecifier; // pure virtual ?
 	}
 	decl->setStorageSpecifiers( storageSpecifiers );
 	
-	KDevelop::FunctionDeclaration::FunctionSpecifiers functionSpecifiers;
-	functionSpecifiers |= KDevelop::FunctionDeclaration::VirtualSpecifier;
+	FunctionDeclaration::FunctionSpecifiers functionSpecifiers;
+	functionSpecifiers |= FunctionDeclaration::VirtualSpecifier;
 	decl->setFunctionSpecifiers( functionSpecifiers );
 	
 	FunctionType::Ptr funcType( new FunctionType() );
 	
 	if( node->begin->type ){
+		DUChainReadLocker lock;
 		ExpressionVisitor exprRetType( *editor(), currentContext() );
 		exprRetType.setAllowVoid( true );
 		exprRetType.visitNode( node->begin->type );
@@ -393,9 +418,11 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *iter = node->begin->argumentsSequence->front();
 		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *end = iter;
 		do{
+			DUChainReadLocker lock;
 			ExpressionVisitor exprArgType( *editor(), currentContext() );
 			exprArgType.visitNode( iter->element->type );
 			AbstractType::Ptr argType( exprArgType.lastType() );
+			lock.unlock();
 			
 			funcType->addArgument( argType );
 			
@@ -403,7 +430,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 				iter->element->name, DeclarationFlags::NoFlags );
 // 			declArg->setAlwaysForceDirect( true ); // nobody seems to be using this?
 			declArg->setAbstractType( argType );
-			declArg->setKind( KDevelop::Declaration::Instance );
+			declArg->setKind( Declaration::Instance );
 			closeDeclaration();
 			
 			iter = iter->next;
@@ -414,9 +441,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	// type and arguments in function type otherwise the information will not show up in browsing
 	decl->setType( funcType );
 	
-	lock.unlock();
 	DeclarationBuilderBase::visitClassFunctionDeclare( node );
-	lock.lock();
 	
 	closeContext();
 	closeDeclaration();
@@ -424,8 +449,6 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 
 void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitInterface";
-	
-	DUChainWriteLocker lock;
 	
 	StructureType::Ptr type( new StructureType() );
 	
@@ -435,27 +458,28 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	
 	eventuallyAssignInternalContext();
 	
-	decl->setKind( KDevelop::Declaration::Type );
+	decl->setKind( Declaration::Type );
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->clearBaseClasses();
-	decl->setClassType( KDevelop::ClassDeclarationData::Interface );
-	decl->setClassModifier( KDevelop::ClassDeclarationData::Abstract );
+	decl->setClassType( ClassDeclarationData::Interface );
+	decl->setClassModifier( ClassDeclarationData::Abstract );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
 	// add interfaces
 	if( node->begin->implementsSequence ){
 		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
 		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
+		DUChainReadLocker lock;
 		do{
 			ExpressionVisitor exprvisitor( *editor(), currentContext() );
 			exprvisitor.visitNode( iter->element );
 			
 			if( exprvisitor.lastType()
-			&& exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+			&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 				const StructureType::Ptr baseType = exprvisitor.lastType().cast<StructureType>();
 				BaseClassInstance base;
 				base.baseClass = baseType->indexed();
-				base.access = KDevelop::Declaration::Public;
+				base.access = Declaration::Public;
 				decl->addBaseClass( base );
 			}
 			iter = iter->next;
@@ -471,19 +495,84 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	openContextInterface( node );
 	decl->setInternalContext( currentContext() );
 	
-	lock.unlock();
 	DeclarationBuilderBase::visitInterface( node );
-	lock.lock();
 	
 	closeContext();
 	closeType();
 	closeDeclaration();
 }
 
+void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ){
+	if( ! node->begin->type ){
+		return; // used for constructors. should never happen here
+	}
+	
+	ClassFunctionDeclaration *decl;
+	
+	if( node->begin->name ){
+		decl = openDeclaration<ClassFunctionDeclaration>( node->begin->name,
+			node->begin->name, DeclarationFlags::NoFlags );
+		
+	}else if( node->begin->op ){
+		decl = openDeclaration<ClassFunctionDeclaration>(
+			Identifier( editor()->tokenText( *node->begin->op ) ),
+			editorFindRangeNode( node->begin->op ), DeclarationFlags::NoFlags );
+		
+	}else{
+		return;
+	}
+	
+	decl->setKind( Declaration::Instance );
+	decl->setComment( getDocumentationForNode( *node ) );
+	decl->setAccessPolicy( ClassDeclaration::AccessPolicy::Public );
+	decl->setFunctionSpecifiers( FunctionDeclaration::VirtualSpecifier );
+	
+	FunctionType::Ptr funcType( new FunctionType() );
+	{
+	DUChainReadLocker lock;
+	ExpressionVisitor exprRetType( *editor(), currentContext() );
+	exprRetType.setAllowVoid( true );
+	exprRetType.visitNode( node->begin->type );
+	funcType->setReturnType( exprRetType.lastType() );
+	}
+	
+	openContextInterfaceFunction( node );
+	decl->setInternalContext( currentContext() );
+	
+	if( node->begin->argumentsSequence ){
+		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *iter = node->begin->argumentsSequence->front();
+		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *end = iter;
+		do{
+			DUChainReadLocker lock;
+			ExpressionVisitor exprArgType( *editor(), currentContext() );
+			exprArgType.visitNode( iter->element->type );
+			AbstractType::Ptr argType( exprArgType.lastType() );
+			lock.unlock();
+			
+			funcType->addArgument( argType );
+			
+			Declaration * const declArg = openDeclaration<Declaration>( iter->element->name,
+				iter->element->name, DeclarationFlags::NoFlags );
+			declArg->setAbstractType( argType );
+			declArg->setKind( Declaration::Instance );
+			closeDeclaration();
+			
+			iter = iter->next;
+		}while( iter != end );
+	}
+	
+	// assign function type to function declaration. this has to be done after setting return
+	// type and arguments in function type otherwise the information will not show up in browsing
+	decl->setType( funcType );
+	
+	DeclarationBuilderBase::visitInterfaceFunctionDeclare( node );
+	
+	closeContext();
+	closeDeclaration();
+}
+
 void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitEnumeration";
-	
-	DUChainWriteLocker lock;
 	
 	StructureType::Ptr type( new StructureType() );
 	
@@ -493,11 +582,11 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	
 	eventuallyAssignInternalContext();
 	
-	decl->setKind( KDevelop::Declaration::Type );
+	decl->setKind( Declaration::Type );
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->clearBaseClasses();
-	decl->setClassType( KDevelop::ClassDeclarationData::Class );
-	decl->setClassModifier( KDevelop::ClassDeclarationData::Final );
+	decl->setClassType( ClassDeclarationData::Class );
+	decl->setClassModifier( ClassDeclarationData::Final );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
 	// base class. this is only done if this is not the enumeration class from
@@ -506,7 +595,7 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	if( typeEnumeration ){
 		BaseClassInstance base;
 		base.baseClass = typeEnumeration->indexed();
-		base.access = KDevelop::Declaration::Public;
+		base.access = Declaration::Public;
 		decl->addBaseClass( base );
 	}
 	
@@ -519,9 +608,7 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	openContextEnumeration( node );
 	decl->setInternalContext( currentContext() );
 	
-	lock.unlock();
 	DeclarationBuilderBase::visitEnumeration( node );
-	lock.lock();
 	
 	closeContext();
 	closeType();
@@ -529,59 +616,52 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 }
 
 void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
-	DUChainWriteLocker lock;
-	
 	ClassMemberDeclaration * const decl = openDeclaration<ClassMemberDeclaration>(
 		node->name, node->name, DeclarationFlags::NoFlags );
 // 	decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
-	decl->setKind( KDevelop::Declaration::Instance );
+	decl->setKind( Declaration::Instance );
 	decl->setComment( getDocumentationForNode( *node ) );
-	decl->setAccessPolicy( KDevelop::Declaration::Public );
-	decl->setStorageSpecifiers( KDevelop::ClassMemberDeclaration::StaticSpecifier );
+	decl->setAccessPolicy( Declaration::Public );
+	decl->setStorageSpecifiers( ClassMemberDeclaration::StaticSpecifier );
 	
 	// type is the enumeration class
-	const Declaration * const enumDecl = Helpers::classDeclFor(
-		DUChainPointer<const DUContext>( decl->context() ) );
+	const Declaration * const enumDecl = Helpers::classDeclFor( DUChainPointer<const DUContext>( decl->context() ) );
 	if( enumDecl ){
 		decl->setType( enumDecl->abstractType() );
 	}
 	
 	if( node->value ){
-		lock.unlock();
 		visitNode( node->value );
-		lock.lock();
 	}
 	
 	closeDeclaration();
 }
 
 void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
-	DUChainWriteLocker lock;
-	
 	openContext( node, DUContext::Other, QualifiedIdentifier( "{block}" ) );
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ExpressionBlockArgumentAst*> *iter = node->begin->argumentsSequence->front();
 		const KDevPG::ListNode<ExpressionBlockArgumentAst*> *end = iter;
 		do{
+			DUChainReadLocker lock;
 			ExpressionVisitor exprArgType( *editor(), currentContext() );
 			exprArgType.visitNode( iter->element->type );
 			const AbstractType::Ptr argType( exprArgType.lastType() );
+			lock.unlock();
 			
 			Declaration * const declArg = openDeclaration<Declaration>( iter->element->name,
 				iter->element->name, DeclarationFlags::NoFlags );
 // 			declArg->setAlwaysForceDirect( true ); // nobody seems to be using this?
 			declArg->setAbstractType( argType );
-			declArg->setKind( KDevelop::Declaration::Instance );
+			declArg->setKind( Declaration::Instance );
 			closeDeclaration();
 			
 			iter = iter->next;
 		}while( iter != end );
 	}
 	
-	lock.unlock();
 	DefaultVisitor::visitExpressionBlock( node );
-	lock.lock();
 	
 	closeContext();
 }
@@ -591,9 +671,7 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{if}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -602,7 +680,6 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 	
@@ -618,9 +695,7 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 	
 	// else
 	if( node->elseSequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{else}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -629,7 +704,6 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
@@ -638,9 +712,7 @@ void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{elif}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -649,7 +721,6 @@ void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
@@ -669,9 +740,7 @@ void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
 	
 	// else
 	if( node->elseSequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{else}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -680,7 +749,6 @@ void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
@@ -696,9 +764,7 @@ void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
 	}
 	
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{case}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -707,7 +773,6 @@ void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
@@ -720,9 +785,7 @@ void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
 	visitNode( node->step );
 	
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{for}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -731,7 +794,6 @@ void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
@@ -740,9 +802,7 @@ void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{while}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -751,16 +811,13 @@ void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 }
 
 void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 	if( node->bodySequence ){
-		DUChainWriteLocker lock;
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{try}" ) );
-		lock.unlock();
 		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
@@ -769,7 +826,6 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 			iter = iter->next;
 		}while( iter != end );
 		
-		lock.lock();
 		closeContext();
 	}
 	
@@ -784,34 +840,31 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 }
 
 void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
-	DUChainWriteLocker lock;
 	openContext( node, DUContext::Other, QualifiedIdentifier( "{catch}" ) );
 	
 	if( node->variable ){
+		DUChainReadLocker lock;
 		ExpressionVisitor exprType( *editor(), currentContext() );
 		exprType.visitNode( node->type );
 		const AbstractType::Ptr type( exprType.lastType() );
+		lock.unlock();
 		
 		Declaration * const decl = openDeclaration<Declaration>(
 			node->variable, node->variable, DeclarationFlags::NoFlags );
 // 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
-		decl->setKind( KDevelop::Declaration::Instance );
+		decl->setKind( Declaration::Instance );
 		
 		closeDeclaration();
 	}
 	
 	if( node->bodySequence ){
-		lock.unlock();
-		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
 		do{
 			visitNode( iter->element );
 			iter = iter->next;
 		}while( iter != end );
-		
-		lock.lock();
 	}
 	
 	closeContext();
@@ -822,11 +875,11 @@ void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDef
 		return;
 	}
 	
-	DUChainWriteLocker lock;
-	
+	DUChainReadLocker lock;
 	ExpressionVisitor exprType( *editor(), currentContext() );
 	exprType.visitNode( node->type );
 	AbstractType::Ptr type( exprType.lastType() );
+	lock.unlock();
 	
 	const KDevPG::ListNode<StatementVariableDefinitionAst*> *iter = node->variablesSequence->front();
 	const KDevPG::ListNode<StatementVariableDefinitionAst*> *end = iter;
@@ -835,7 +888,7 @@ void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDef
 			iter->element->name, iter->element->name, DeclarationFlags::NoFlags );
 // 		decl->setAlwaysForceDirect( true ); // nobody seems to be using this?
 		decl->setType( type );
-		decl->setKind( KDevelop::Declaration::Instance );
+		decl->setKind( Declaration::Instance );
 		
 		if( iter->element->value ){
 			visitNode( iter->element->value );
@@ -856,15 +909,15 @@ void DeclarationBuilder::visitTypeModifier( TypeModifierAst *node ){
 // Protected Functions
 ////////////////////////
 
-KDevelop::ClassMemberDeclaration::AccessPolicy DeclarationBuilder::accessPolicyFromLastModifiers() const{
+ClassMemberDeclaration::AccessPolicy DeclarationBuilder::accessPolicyFromLastModifiers() const{
 	if( ( pLastModifiers & etmPrivate ) == etmPrivate ){
-		return KDevelop::ClassMemberDeclaration::Private;
+		return ClassMemberDeclaration::Private;
 		
 	}else if( ( pLastModifiers & etmProtected ) == etmProtected ){
-		return KDevelop::ClassMemberDeclaration::Protected;
+		return ClassMemberDeclaration::Protected;
 		
 	}else{
-		return KDevelop::ClassMemberDeclaration::Public;
+		return ClassMemberDeclaration::Public;
 	}
 }
 

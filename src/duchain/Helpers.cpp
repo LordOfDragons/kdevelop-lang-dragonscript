@@ -807,13 +807,7 @@ const TopDUContext *context, ContextSearchFlags flags, int depth ){
 
 Declaration *Helpers::resolveAliasDeclaration( Declaration *decl ){
 	AliasDeclaration * const alias = dynamic_cast<AliasDeclaration*>( decl );
-	if( alias ){
-		DUChainReadLocker lock;
-		return alias->aliasedDeclaration().data();
-		
-	}else{
-		return decl;
-	}
+	return alias ? alias->aliasedDeclaration().data() : decl;
 }
 
 IndexedString Helpers::getDocumentationFileObject(){

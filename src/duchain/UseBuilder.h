@@ -69,20 +69,17 @@ protected:
 	
 	/**
 	 * \brief Find context for function call object.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	DUChainPointer<const DUContext> functionGetContext( AstNode *node,
 		DUChainPointer<const DUContext> context );
 	
 	/**
 	 * \brief Type of node using ExpressionVisitor.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	KDevelop::AbstractType::Ptr typeOfNode( AstNode *node, DUChainPointer<const DUContext> context );
 	
 	/**
 	 * \brief Check function call.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
 		const KDevelop::AbstractType::Ptr &argument );
@@ -92,50 +89,19 @@ protected:
 	
 	/**
 	 * \brief Report semantic error if reporting is enabled.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	void reportSemanticError( const RangeInRevision &range, const QString &hint );
 	
 	/**
 	 * \brief Report semantic error if reporting is enabled.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	void reportSemanticError( const RangeInRevision &range, const QString &hint,
 		const QVector<KDevelop::IProblem::Ptr> &diagnostics );
 	
 	/**
-	 * \brief Report semantic error if reporting is enabled.
-	 * 
-	 * Temporarily unlocks the DUChainReadLocker.
-	 * 
-	 * \note Does use DUChainWriteLocker internally.
-	 */
-	void reportSemanticError( DUChainReadLocker &locker, const RangeInRevision &range, const QString &hint );
-	
-	/**
-	 * \brief Report semantic error if reporting is enabled.
-	 * 
-	 * Temporarily unlocks the DUChainReadLocker.
-	 * 
-	 * \note Does use DUChainWriteLocker internally.
-	 */
-	void reportSemanticError( DUChainReadLocker &locker, const RangeInRevision &range,
-		const QString &hint, const QVector<KDevelop::IProblem::Ptr> &diagnostics );
-	
-	/**
 	 * \brief Report semantic hint if reporting is enabled.
-	 * \note Does use DUChainWriteLocker internally.
 	 */
 	void reportSemanticHint( const RangeInRevision &range, const QString &hint );
-	
-	/**
-	 * \brief Report semantic hint if reporting is enabled.
-	 * 
-	 * Temporarily unlocks the DUChainReadLocker.
-	 * 
-	 * \note Does use DUChainWriteLocker internally.
-	 */
-	void reportSemanticHint( DUChainReadLocker &locker, const RangeInRevision &range, const QString &hint );
 	
 	
 	
@@ -148,7 +114,6 @@ private:
 	
 	/**
 	 * \brief Get context at position or current content.
-	 * \note DUChainReadLocker required.
 	 */
 	DUContext *contextAtOrCurrent( const CursorInRevision &pos );
 	

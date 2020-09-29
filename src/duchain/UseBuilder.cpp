@@ -15,16 +15,7 @@
 #include "ExpressionVisitor.h"
 #include "Helpers.h"
 
-using KDevelop::DUChainReadLocker;
-using KDevelop::Problem;
-using KDevelop::DocumentRange;
-using KDevelop::DUChainWriteLocker;
-using KDevelop::DUChain;
-using KDevelop::DeclarationPointer;
-using KDevelop::ClassMemberDeclaration;
-using KDevelop::ClassFunctionDeclaration;
-using KDevelop::FunctionType;
-using KDevelop::StructureType;
+using namespace KDevelop;
 
 namespace DragonScript{
 
@@ -46,14 +37,9 @@ void UseBuilder::setEnableErrorReporting( bool enable ){
 
 
 DUContext *UseBuilder::contextAtOrCurrent( const CursorInRevision &pos ){
+	DUChainReadLocker lock;
 	DUContext * const context = topContext()->findContextAt( pos, true );
-	
-	if( context ){
-		return context;
-		
-	}else{
-		return currentContext();
-	}
+	return context ? context : currentContext();
 }
 
 
@@ -62,8 +48,6 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 	if( ! node->nameSequence ){
 		return;
 	}
-	
-	DUChainReadLocker lock;
 	
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
 	
@@ -83,6 +67,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			bool addUse = true;
 			
 			if( context ){
+				DUChainReadLocker lock;
 				decl = Helpers::declarationForName( name, CursorInRevision( INT_MAX, INT_MAX ), context );
 				context = nullptr;
 			}
@@ -95,14 +80,12 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 				}
 				
 			}else{
-				reportSemanticError( lock, useRange, i18n( "Unknown type: %1", name ) );
+				reportSemanticError( useRange, i18n( "Unknown type: %1", name ) );
 			}
 			
 			if( addUse ){
-				lock.unlock();
 				UseBuilderBase::newUse( iter->element, DeclarationPointer( decl ) );
 // 				UseBuilderBase::newUse( useRange, DeclarationPointer( decl ) );
-				lock.lock();
 			}
 			
 			if( decl ){
@@ -164,21 +147,19 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	}
 	
 	// process super arguments building signature at the same time
-	QVector<KDevelop::AbstractType::Ptr> signature;
-	DUChainReadLocker lock;
+	QVector<AbstractType::Ptr> signature;
 	
 	if( node->superArgumentsSequence ){
 		const KDevPG::ListNode<ExpressionAst*> *iter = node->superArgumentsSequence->front();
 		const KDevPG::ListNode<ExpressionAst*> *end = iter;
 		do{
-			lock.unlock();
 			visitNode( iter->element );
-			lock.lock();
 			
 			if( pCurExprType ){
 				signature.append( pCurExprType );
 				
 			}else{
+				DUChainReadLocker lock;
 				signature.append( Helpers::getTypeVoid() ); // error
 			}
 			
@@ -195,7 +176,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 			<< declaration->toString();
 	}
 	qDebug() << "KDevDScript: UseBuilder::visitClassFunctionDeclareBegin match signature";
-	foreach( KDevelop::AbstractType::Ptr type, signature ){
+	foreach( AbstractType::Ptr type, signature ){
 		qDebug() << "KDevDScript: UseBuilder::visitClassFunctionDeclareBegin" << type->toString();
 	}
 	*/
@@ -214,12 +195,12 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 		}else if( possibleFunctions.size() > 1 ){
 			useFunction = possibleFunctions.at( 0 );
 			
-			QVector<KDevelop::IProblem::Ptr> diagnostics;
+			QVector<IProblem::Ptr> diagnostics;
 			foreach( ClassFunctionDeclaration* each, possibleFunctions ){
 				Problem * const problem = new Problem();
 				problem->setFinalLocation( DocumentRange( each->url(), each->range().castToSimpleRange() ) );
-				problem->setSource( KDevelop::IProblem::SemanticAnalysis );
-				problem->setSeverity( KDevelop::IProblem::Hint );
+				problem->setSource( IProblem::SemanticAnalysis );
+				problem->setSeverity( IProblem::Hint );
 				
 				const ClassDeclaration * const classDecl = Helpers::classDeclFor(
 					DUChainPointer<const DUContext>( each->context() ) );
@@ -231,24 +212,25 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 					problem->setDescription( i18n( "Candidate: %1", each->toString() ) );
 				}
 				
-				diagnostics.append( KDevelop::IProblem::Ptr( problem ) );
+				diagnostics.append( IProblem::Ptr( problem ) );
 			}
 			
 			const char *separator = "";
 			QString sig( isSuper ? "super(" : "this(" );
-			foreach( const KDevelop::AbstractType::Ptr &each, signature ){
+			foreach( const AbstractType::Ptr &each, signature ){
 				sig.append( separator ).append( each->toString() );
 				separator = ", ";
 			}
 			sig.append( ")" );
 			
 			const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
+			
 			if( classDecl ){
-				reportSemanticError( lock, useRange, i18n( "Ambiguous constructor call: found %1.%2",
+				reportSemanticError( useRange, i18n( "Ambiguous constructor call: found %1.%2",
 					classDecl->identifier().toString(), sig ), diagnostics );
 				
 			}else{
-				reportSemanticError( lock, useRange,
+				reportSemanticError( useRange,
 					i18n( "Ambiguous constructor call: found %1", sig ), diagnostics );
 			}
 		}
@@ -256,15 +238,13 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	
 	// use function if found. no context required since this is outside function block
 	if( useFunction ){
-		lock.unlock();
 		//UseBuilderBase::newUse( node->name, useRange, DeclarationPointer( useFunction ) );
 		UseBuilderBase::newUse( useRange, DeclarationPointer( useFunction ) );
-		lock.lock();
 		
 	}else{
 		const char *separator = "";
 		QString sig( isSuper ? "super(" : "this(" );
-		foreach( const KDevelop::AbstractType::Ptr &each, signature ){
+		foreach( const AbstractType::Ptr &each, signature ){
 			sig.append( separator ).append( each->toString() );
 			separator = ", ";
 		}
@@ -272,11 +252,11 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 		
 		const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
 		if( classDecl ){
-			reportSemanticError( lock, useRange, i18n( "No suitable constructor found. expected %1",
+			reportSemanticError( useRange, i18n( "No suitable constructor found. expected %1",
 				classDecl->identifier().toString(), sig ) );
 			
 		}else{
-			reportSemanticError( lock, useRange, i18n( "No suitable constructor found. expected %1", sig ) );
+			reportSemanticError( useRange, i18n( "No suitable constructor found. expected %1", sig ) );
 		}
 	}
 }
@@ -284,51 +264,41 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 
 
 void UseBuilder::visitExpression( ExpressionAst *node ){
-	DUChainReadLocker lock;
 	pCurExprContext = contextAtOrCurrent( editor()->findPosition( *node ) );
 	pCurExprType = nullptr;
-	lock.unlock();
 	
 	UseBuilderBase::visitExpression( node );
 }
 
 void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
-	DUChainReadLocker lock;
-	
 	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	const QString name( editor()->tokenText( *node ) );
-	RangeInRevision useRange( editor()->findRange( *node ) );
+	const RangeInRevision useRange( editor()->findRange( *node ) );
 	
+	DUChainReadLocker lock;
 	ExpressionVisitor exprValue( *editor(), context );
 	exprValue.visitNode( node );
 	DeclarationPointer declaration( exprValue.lastDeclaration() );
-	KDevelop::AbstractType::Ptr type( exprValue.lastType() );
+	AbstractType::Ptr type( exprValue.lastType() );
+	lock.unlock();
 	
 	if( declaration ) {
 		// add a use only for "this" and "super". the rest only updated the expr-context
 		switch( pParseSession.tokenStream()->at( node->value ).kind ){
 		case TokenTypeWrapper::TokenType::Token_THIS:
 		case TokenTypeWrapper::TokenType::Token_SUPER:
-			lock.unlock();
 			//UseBuilderBase::newUse( node, useRange, declaration );
 			UseBuilderBase::newUse( useRange, declaration );
-			lock.lock();
 			break;
 		}
 	}
 	
-	if( declaration ){
-		pCurExprContext = declaration->internalContext();
-		
-	}else{
-		pCurExprContext = nullptr;
-	}
+	pCurExprContext = declaration ? declaration->internalContext() : nullptr;
 	pCurExprType = type;
 }
 
 void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( pCurExprContext );
 	
 	if( node->funcCall != -1 ){
@@ -343,20 +313,19 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		*/
 		
 		// process function arguments building signature at the same time
-		QVector<KDevelop::AbstractType::Ptr> signature;
+		QVector<AbstractType::Ptr> signature;
 		
 		if( node->argumentsSequence ){
 			const KDevPG::ListNode<ExpressionAst*> *iter = node->argumentsSequence->front();
 			const KDevPG::ListNode<ExpressionAst*> *end = iter;
 			do{
-				lock.unlock();
 				visitNode( iter->element );
-				lock.lock();
 				
 				if( pCurExprType ){
 					signature.append( pCurExprType );
 					
 				}else{
+					DUChainReadLocker lock;
 					signature.append( Helpers::getTypeInvalid() );
 				}
 				
@@ -366,18 +335,18 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		
 		/*
 		qDebug() << "KDevDScript: UseBuilder::visitExpressionMember match signature";
-		foreach( KDevelop::AbstractType::Ptr type, signature ){
+		foreach( AbstractType::Ptr type, signature ){
 			qDebug() << "KDevDScript: UseBuilder::visitExpressionMember" << type->toString();
 		}
 		*/
 		
-		lock.unlock();
 		checkFunctionCall( node->name, context, signature );
 		
 	}else{
 		const QString name( editor()->tokenText( *node->name ) );
 		QVector<Declaration*> declarations;
 		if( context ){
+			DUChainReadLocker lock;
 			declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
 		}
 		
@@ -392,22 +361,22 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 				}
 				
 				if( context ){
+					DUChainReadLocker lock;
 					declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
 				}
 			}
 		}
 		
-		RangeInRevision useRange( editor()->findRange( *node->name ) );
+		const RangeInRevision useRange( editor()->findRange( *node->name ) );
 		
 		if( declarations.isEmpty() ){
 			const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
-			lock.unlock();
 			if( classDecl ){
-				reportSemanticError( lock, useRange, i18n( "Unknown object: %1.%2",
+				reportSemanticError( useRange, i18n( "Unknown object: %1.%2",
 					classDecl->identifier().toString(), name ) );
 				
 			}else{
-				reportSemanticError( lock, useRange, i18n( "Unknown object: %1", name ) );
+				reportSemanticError( useRange, i18n( "Unknown object: %1", name ) );
 			}
 			UseBuilderBase::visitExpressionMember( node );
 			pCurExprContext = nullptr;
@@ -420,11 +389,11 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			const ClassDeclaration * const classDecl = Helpers::classDeclFor(
 				DUChainPointer<const DUContext>( declaration->context() ) );
 			if( classDecl ){
-				reportSemanticError( lock, useRange, i18n( "Expected object but found function: %1.%2",
+				reportSemanticError( useRange, i18n( "Expected object but found function: %1.%2",
 					classDecl->identifier().toString(), declaration->toString() ) );
 				
 			}else{
-				reportSemanticError( lock, useRange, i18n( "Expected object but found function: %1",
+				reportSemanticError( useRange, i18n( "Expected object but found function: %1",
 					declaration->toString() ) );
 			}
 			
@@ -433,10 +402,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			return;
 		}
 		
-		lock.unlock();
 		//UseBuilderBase::newUse( node->name, useRange, DeclarationPointer( declaration ) );
 		UseBuilderBase::newUse( useRange, DeclarationPointer( declaration ) );
-		lock.lock();
 		
 		const StructureType::Ptr structType = declaration->type<StructureType>();
 		if( structType ){
@@ -452,11 +419,12 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 void UseBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 	UseBuilderBase::visitExpressionBlock( node );
 	
-	DUChainReadLocker lock;
-	
 	DeclarationPointer declBlock;
-	KDevelop::AbstractType::Ptr typeBlock;
+	AbstractType::Ptr typeBlock;
+	{
+	DUChainReadLocker lock;
 	Helpers::getTypeBlock( declBlock, typeBlock );
+	}
 	
 	if( declBlock ){
 		pCurExprContext = declBlock->internalContext();
@@ -468,10 +436,7 @@ void UseBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 }
 
 void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -488,10 +453,7 @@ void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
 }
 
 void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -509,12 +471,12 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 		}
 		
 		if( isAssign ){
-			const KDevelop::AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
-			const KDevelop::AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+			const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
+			const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
 			
 			if( ! Helpers::castable( top, typeRight, typeLeft ) ){
-				RangeInRevision useRange( editor()->findRange( *iter->element->op ) );
-				reportSemanticError( lock, useRange, i18n( "Cannot assign object of type %1 to %2",
+				reportSemanticError( editor()->findRange( *iter->element->op ),
+					i18n( "Cannot assign object of type %1 to %2",
 					typeRight ? typeRight->toString() : "??", typeLeft ? typeLeft->toString() : "??" ) );
 			}
 			
@@ -530,10 +492,7 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 }
 
 void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -550,10 +509,7 @@ void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
 }
 
 void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -562,18 +518,45 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 	
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *end = iter;
+	const TopDUContext * const top = topContext();
+	
 	do{
-		checkFunctionCall( iter->element->op, contextLeft, typeOfNode( iter->element->right, context ) );
-		contextLeft = pCurExprContext;
+		bool isEquals = false;
+		if( iter->element->op && iter->element->op->op != -1 ){
+			switch( pParseSession.tokenStream()->at( iter->element->op->op ).kind ){
+			case TokenType::Token_EQUALS:
+			case TokenType::Token_NEQUALS:
+				isEquals = true;
+				break;
+			}
+		}
+		
+		if( isEquals ){
+			const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
+			const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+			
+			if( ! Helpers::castable( top, typeRight, typeLeft ) ){
+				reportSemanticError( editor()->findRange( *iter->element->op ),
+					i18n( "Cannot compare object of type %1 with %2",
+					typeLeft ? typeLeft->toString() : "??", typeRight ? typeRight->toString() : "??" ) );
+			}
+			
+			DUChainReadLocker lock;
+			pCurExprType = Helpers::getTypeBool();
+			pCurExprContext = Helpers::contextForType( top, pCurExprType );
+			contextLeft = pCurExprContext;
+			
+		}else{
+			checkFunctionCall( iter->element->op, contextLeft, typeOfNode( iter->element->right, context ) );
+			contextLeft = pCurExprContext;
+		}
+		
 		iter = iter->next;
 	}while( iter != end );
 }
 
 void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -582,18 +565,35 @@ void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 	
 	const KDevPG::ListNode<ExpressionLogicMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionLogicMoreAst*> *end = iter;
+	const TopDUContext * const top = topContext();
+	
+	DUChainReadLocker lock;
+	AbstractType::Ptr typeBool( Helpers::getTypeBool() );
+	lock.unlock();
+	
 	do{
-		checkFunctionCall( iter->element->op, contextLeft, typeOfNode( iter->element->right, context ) );
+		const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
+		const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+		
+		if( ! Helpers::castable( top, typeLeft, typeBool ) ){
+			reportSemanticError( editor()->findRange( *iter->element->op ),
+				i18n( "Left side type %1 is not bool", typeLeft ? typeLeft->toString() : "??" ) );
+		}
+		if( ! Helpers::castable( top, typeRight, typeBool ) ){
+			reportSemanticError( editor()->findRange( *iter->element->op ),
+				i18n( "Right side type %1 not bool", typeRight ? typeRight->toString() : "??" ) );
+		}
+		
+		pCurExprType = typeBool;
+		pCurExprContext = Helpers::contextForType( top, typeBool );
 		contextLeft = pCurExprContext;
+		
 		iter = iter->next;
 	}while( iter != end );
 }
 
 void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->moreSequence ){
@@ -610,11 +610,8 @@ void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
 }
 
 void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+ 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
 	
 	if( ! node->opSequence ){
 		return;
@@ -623,17 +620,15 @@ void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
 	const KDevPG::ListNode<ExpressionPostfixOpAst*> *iter = node->opSequence->front();
 	const KDevPG::ListNode<ExpressionPostfixOpAst*> *end = iter;
 	do{
-		checkFunctionCall( iter->element, contextLeft, QVector<KDevelop::AbstractType::Ptr>() );
+		checkFunctionCall( iter->element, contextLeft, QVector<AbstractType::Ptr>() );
 		contextLeft = pCurExprContext;
 		iter = iter->next;
 	}while( iter != end );
 }
 
 void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
 	
-	lock.unlock();
 	pCurExprContext = context;
 	pCurExprType = nullptr;
 	visitNode( node->left );
@@ -643,9 +638,11 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	}
 	
 	DeclarationPointer classDeclBool;
-	KDevelop::AbstractType::Ptr typeBool;
-	lock.lock();
+	AbstractType::Ptr typeBool;
+	{
+	DUChainReadLocker lock;
 	Helpers::getTypeBool( classDeclBool, typeBool );
+	}
 	
 	const KDevPG::ListNode<ExpressionSpecialMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionSpecialMoreAst*> *end = iter;
@@ -653,9 +650,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	do{
 		pCurExprContext = context;
 		pCurExprContext = nullptr;
-		lock.unlock();
 		visitNode( iter->element->type );
-		lock.lock();
 		
 		pCurExprContext = nullptr;
 		pCurExprType = nullptr;
@@ -663,6 +658,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 		if( iter->element->op && iter->element->op->op != -1 ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
 				if( context ){
+					DUChainReadLocker lock;
 					ExpressionVisitor exprValue( *editor(), context.data() );
 					exprValue.visitNode( iter->element->type );
 					const DeclarationPointer declaration( exprValue.lastDeclaration() );
@@ -688,10 +684,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 }
 
 void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
 	DUChainPointer<const DUContext> contextRight( functionGetContext( node->right, context ) );
 	
 	if( ! node->opSequence ){
@@ -707,36 +700,32 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 	}while( iter != end );
 	
 	foreach( ExpressionUnaryOpAst *each, sequence ){
-		checkFunctionCall( each, contextRight, QVector<KDevelop::AbstractType::Ptr>() );
+		checkFunctionCall( each, contextRight, QVector<AbstractType::Ptr>() );
 		contextRight = pCurExprContext;
 	}
 }
 
 void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
-	DUChainReadLocker lock;
 	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	lock.unlock();
-	
-	KDevelop::AbstractType::Ptr typeCondition( typeOfNode( node->condition, context ) );
+	AbstractType::Ptr typeCondition( typeOfNode( node->condition, context ) );
 	
 	if( ! node->more ){
 		return;
 	}
 	
-	KDevelop::AbstractType::Ptr typeIf( typeOfNode( node->more->expressionIf, context ) );
-	KDevelop::AbstractType::Ptr typeElse( typeOfNode( node->more->expressionElse, context ) );
+	AbstractType::Ptr typeIf( typeOfNode( node->more->expressionIf, context ) );
+	AbstractType::Ptr typeElse( typeOfNode( node->more->expressionElse, context ) );
 	const TopDUContext * const top = topContext();
 	
 	if( ! Helpers::castable( top, typeCondition, Helpers::getTypeBool() ) ){
-		RangeInRevision useRange( editor()->findRange( *node->condition ) );
-		reportSemanticError( lock, useRange, i18n( "Cannot assign object of type %1 to bool",
-			typeCondition ? typeCondition->toString() : "??" ) );
+		reportSemanticError( editor()->findRange( *node->condition ),
+			i18n( "Cannot assign object of type %1 to bool", typeCondition ? typeCondition->toString() : "??" ) );
 	}
 	
 	if( node->more->expressionIf && node->more->expressionElse
 	&& ! Helpers::castable( top, typeElse, typeIf ) ){
-		RangeInRevision useRange( editor()->findRange( *node->more->expressionElse ) );
-		reportSemanticError( lock, useRange, i18n( "Cannot assign object of type %1 to %2",
+		reportSemanticError( editor()->findRange( *node->more->expressionElse ),
+			i18n( "Cannot assign object of type %1 to %2",
 			typeElse ? typeElse->toString() : "??", typeIf ? typeIf->toString() : "??" ) );
 	}
 	
@@ -747,10 +736,8 @@ void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
 void UseBuilder::visitStatementFor( StatementForAst *node ){
 	// variable is ExpressionObjectAst. we need to manually clear the search context
 	// as if ExpressionAst would be used.
-	DUChainReadLocker lock;
 	pCurExprContext = contextAtOrCurrent( editor()->findPosition( *node ) );
 	pCurExprType = nullptr;
-	lock.unlock();
 	
 	UseBuilderBase::visitStatementFor( node );
 }
@@ -772,7 +759,6 @@ DUChainPointer<const DUContext> context ){
 		return contextLeft;
 	}
 	
-	DUChainReadLocker lock;
 	const ClassDeclaration * const classDecl = Helpers::classDeclFor( pCurExprContext );
 	if( classDecl ){
 		contextLeft = classDecl->internalContext();
@@ -780,15 +766,14 @@ DUChainPointer<const DUContext> context ){
 	return contextLeft;
 }
 
-KDevelop::AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node,
-DUChainPointer<const DUContext> context ){
+AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUChainPointer<const DUContext> context ){
 	if( node ){
 		pCurExprContext = context;
 		pCurExprType = nullptr;
 		visitNode( node );
 	}
 	
-	KDevelop::AbstractType::Ptr type( pCurExprType );
+	AbstractType::Ptr type( pCurExprType );
 	if( ! type ){
 		DUChainReadLocker lock;
 		type = Helpers::getTypeInvalid();
@@ -797,36 +782,33 @@ DUChainPointer<const DUContext> context ){
 }
 
 void UseBuilder::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-const KDevelop::AbstractType::Ptr &argument ){
-	QVector<KDevelop::AbstractType::Ptr> signature;
+const AbstractType::Ptr &argument ){
+	QVector<AbstractType::Ptr> signature;
 	signature.append( argument );
 	checkFunctionCall( node, context, signature );
 }
 
 void UseBuilder::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-const QVector<KDevelop::AbstractType::Ptr> &signature ){
-	DUChainReadLocker lock;
-	
+const QVector<AbstractType::Ptr> &signature ){
 	const QString name( editor()->tokenText( *node ) );
-	RangeInRevision useRange( editor()->findRange( *node ) );
+	const RangeInRevision useRange( editor()->findRange( *node ) );
 	
 	QVector<Declaration*> declarations;
 	if( context ){
+		DUChainReadLocker lock;
 		declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
 	}
 	
 	const TopDUContext * const top = topContext();
 	
 	if( declarations.isEmpty() ){
-		lock.unlock();
-		
 		const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
 		if( classDecl ){
-			reportSemanticError( lock, useRange, i18n( "Unknown function: %1.%2",
+			reportSemanticError( useRange, i18n( "Unknown function: %1.%2",
 				classDecl->identifier().toString(), name ) );
 			
 		}else{
-			reportSemanticError( lock, useRange, i18n( "Unknown function: %1", name ) );
+			reportSemanticError( useRange, i18n( "Unknown function: %1", name ) );
 		}
 		
 		pCurExprContext = nullptr;
@@ -839,11 +821,11 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 		const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
 		
 		if( classDecl ){
-			reportSemanticError( lock, useRange, i18n( "Expected function but found object: %1.%2",
+			reportSemanticError( useRange, i18n( "Expected function but found object: %1.%2",
 				classDecl->identifier().toString(), name ) );
 			
 		}else{
-			reportSemanticError( lock, useRange, i18n( "Expected function but found object: %1", name ) );
+			reportSemanticError( useRange, i18n( "Expected function but found object: %1", name ) );
 		}
 		
 		pCurExprContext = nullptr;
@@ -852,12 +834,16 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 	}
 	
 	// find best matching function
+	DUChainReadLocker lock;
 	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( top, signature, declarations );
+	lock.unlock();
 	
 	if( ! useFunction ){
 		// find functions matching with auto-casting
+		lock.lock();
 		const QVector<ClassFunctionDeclaration*> possibleFunctions(
 			Helpers::autoCastableFunctions( top, signature, declarations ) );
+		lock.unlock();
 		
 		if( possibleFunctions.size() == 1 ){
 			useFunction = possibleFunctions.at( 0 );
@@ -865,28 +851,27 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 		}else if( possibleFunctions.size() > 1 ){
 			useFunction = possibleFunctions.at( 0 );
 			
-			QVector<KDevelop::IProblem::Ptr> diagnostics;
+			QVector<IProblem::Ptr> diagnostics;
 			foreach( ClassFunctionDeclaration* each, possibleFunctions ){
 				Problem * const problem = new Problem();
 				problem->setFinalLocation( DocumentRange( each->url(), each->range().castToSimpleRange() ) );
-				problem->setSource( KDevelop::IProblem::SemanticAnalysis );
-				problem->setSeverity( KDevelop::IProblem::Hint );
+				problem->setSource( IProblem::SemanticAnalysis );
+				problem->setSeverity( IProblem::Hint );
 				
 				const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( each->context() );
 				if( classDecl ){
-					problem->setDescription( i18n( "Candidate: %1.%2",
-						classDecl->identifier().toString(), each->toString() ) );
+					problem->setDescription( i18n( "Candidate: %1.%2", classDecl->identifier().toString(), each->toString() ) );
 					
 				}else{
 					problem->setDescription( i18n( "Candidate: %1", each->toString() ) );
 				}
 				
-				diagnostics.append( KDevelop::IProblem::Ptr( problem ) );
+				diagnostics.append( IProblem::Ptr( problem ) );
 			}
 			
 			const char *separator = "";
 			QString sig( name + "(" );
-			foreach( const KDevelop::AbstractType::Ptr &each, signature ){
+			foreach( const AbstractType::Ptr &each, signature ){
 				sig.append( separator ).append( each->toString() );
 				separator = ", ";
 			}
@@ -894,22 +879,19 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 			
 			const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
 			if( classDecl ){
-				reportSemanticError( lock, useRange, i18n( "Ambiguous function call: found %1.%2",
+				reportSemanticError( useRange, i18n( "Ambiguous function call: found %1.%2",
 					classDecl->identifier().toString(), sig ), diagnostics );
 				
 			}else{
-				reportSemanticError( lock, useRange, i18n( "Ambiguous function call: found %1",
-					sig ), diagnostics );
+				reportSemanticError( useRange, i18n( "Ambiguous function call: found %1", sig ), diagnostics );
 			}
 		}
 	}
 	
 	// use function if found
 	if( useFunction ){
-		lock.unlock();
 		//UseBuilderBase::newUse( node, useRange, DeclarationPointer( useFunction ) );
 		UseBuilderBase::newUse( useRange, DeclarationPointer( useFunction ) );
-		lock.lock();
 		
 		const StructureType::Ptr structType = TypePtr<StructureType>::dynamicCast(
 			useFunction->type<FunctionType>()->returnType() );
@@ -917,26 +899,24 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 			pCurExprContext = structType->internalContext( top );
 		}
 		pCurExprType = useFunction->type<FunctionType>()->returnType();
-		
 		return;
+	}
+	
+	const char *separator = "";
+	QString sig( name + "(" );
+	foreach( const AbstractType::Ptr &each, signature ){
+		sig.append( separator ).append( each->toString() );
+		separator = ", ";
+	}
+	sig.append( ")" );
+	
+	const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
+	if( classDecl ){
+		reportSemanticError( useRange, i18n( "No suitable function found: expected %1.%2",
+			classDecl->identifier().toString(), sig ) );
 		
 	}else{
-		const char *separator = "";
-		QString sig( name + "(" );
-		foreach( const KDevelop::AbstractType::Ptr &each, signature ){
-			sig.append( separator ).append( each->toString() );
-			separator = ", ";
-		}
-		sig.append( ")" );
-		
-		const ClassDeclaration * const classDecl = Helpers::classDeclFor( context );
-		if( classDecl ){
-			reportSemanticError( lock, useRange, i18n( "No suitable function found: expected %1.%2",
-				classDecl->identifier().toString(), sig ) );
-			
-		}else{
-			reportSemanticError( lock, useRange, i18n( "No suitable function found: expected %1", sig ) );
-		}
+		reportSemanticError( useRange, i18n( "No suitable function found: expected %1", sig ) );
 	}
 	
 	pCurExprContext = nullptr;
@@ -946,40 +926,24 @@ const QVector<KDevelop::AbstractType::Ptr> &signature ){
 
 
 void UseBuilder::reportSemanticError( const RangeInRevision &range, const QString &hint ){
-	reportSemanticError( range, hint, QVector<KDevelop::IProblem::Ptr>() );
+	reportSemanticError( range, hint, QVector<IProblem::Ptr>() );
 }
 
 void UseBuilder::reportSemanticError( const RangeInRevision &range, const QString &hint,
-const QVector<KDevelop::IProblem::Ptr> &diagnostics ){
+const QVector<IProblem::Ptr> &diagnostics ){
 	if( ! pEnableErrorReporting ){
 		return;
 	}
 	
 	Problem * const problem = new Problem();
 	problem->setFinalLocation( DocumentRange( pParseSession.currentDocument(), range.castToSimpleRange() ) );
-	problem->setSource( KDevelop::IProblem::SemanticAnalysis );
-	problem->setSeverity( KDevelop::IProblem::Error );
+	problem->setSource( IProblem::SemanticAnalysis );
+	problem->setSeverity( IProblem::Error );
 	problem->setDescription( hint );
 	problem->setDiagnostics( diagnostics );
 	
 	DUChainWriteLocker lock;
 	topContext()->addProblem( ProblemPointer( problem ) );
-}
-
-void UseBuilder::reportSemanticError( DUChainReadLocker &locker, const RangeInRevision &range,
-const QString &hint ){
-	reportSemanticError( locker, range, hint, QVector<KDevelop::IProblem::Ptr>() );
-}
-
-void UseBuilder::reportSemanticError( DUChainReadLocker &locker, const RangeInRevision &range,
-const QString &hint, const QVector<KDevelop::IProblem::Ptr> &diagnostics ){
-	if( ! pEnableErrorReporting ){
-		return;
-	}
-	
-	locker.unlock();
-	reportSemanticError( range, hint, diagnostics );
-	locker.lock();
 }
 
 void UseBuilder::reportSemanticHint( const RangeInRevision &range, const QString &hint ){
@@ -991,23 +955,12 @@ void UseBuilder::reportSemanticHint( const RangeInRevision &range, const QString
 	
 	Problem * const problem = new Problem();
 	problem->setFinalLocation( DocumentRange( pParseSession.currentDocument(), range.castToSimpleRange() ) );
-	problem->setSource( KDevelop::IProblem::SemanticAnalysis );
-	problem->setSeverity( KDevelop::IProblem::Hint );
+	problem->setSource( IProblem::SemanticAnalysis );
+	problem->setSeverity( IProblem::Hint );
 	problem->setDescription( hint );
 	
 	DUChainWriteLocker lock;
 	topContext()->addProblem( ProblemPointer( problem ) );
-}
-
-void UseBuilder::reportSemanticHint( DUChainReadLocker &locker,
-const RangeInRevision &range, const QString &hint ){
-	if( ! pEnableErrorReporting ){
-		return;
-	}
-	
-	locker.unlock();
-	reportSemanticHint( range, hint );
-	locker.lock();
 }
 
 }

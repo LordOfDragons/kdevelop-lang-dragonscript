@@ -2,6 +2,7 @@
 #include <QDebug>
 
 #include <language/duchain/duchain.h>
+#include <language/duchain/duchainlock.h>
 #include <language/backgroundparser/backgroundparser.h>
 #include <interfaces/iproject.h>
 #include <interfaces/iprojectcontroller.h>
@@ -32,6 +33,7 @@ pDebug( true ){
 }
 
 ImportPackage::~ImportPackage(){
+	dropContexts();
 }
 
 QVector<ReferencedTopDUContext> ImportPackage::getContexts(){
@@ -50,6 +52,7 @@ QVector<ReferencedTopDUContext> ImportPackage::getContexts(){
 	pContexts.clear();
 	
 	if( pParsing ){
+		DUChainReadLocker lock;
 		foreach( const IndexedString &file, pFiles ){
 			TopDUContext * const context = duchain.chainForDocument( file );
 			if( context ){
@@ -71,6 +74,7 @@ QVector<ReferencedTopDUContext> ImportPackage::getContexts(){
 		bool allReady = true;
 		pParsing = true;
 		
+		DUChainReadLocker lock;
 		foreach( const IndexedString &file, pFiles ){
 			TopDUContext * const context = duchain.chainForDocument( file );
 			
@@ -127,6 +131,7 @@ bool ImportPackage::addImports( TopDUContext *context ){
 		return false;
 	}
 	
+	DUChainWriteLocker lock;
 	QVector<QPair<TopDUContext*, CursorInRevision>> imports;
 	
 	foreach( const ReferencedTopDUContext &each, contexts ){
@@ -138,6 +143,7 @@ bool ImportPackage::addImports( TopDUContext *context ){
 }
 
 void ImportPackage::dropContexts(){
+	DUChainWriteLocker lock;
 	pContexts.clear();
 	pReady = false;
 	pParsing = false;

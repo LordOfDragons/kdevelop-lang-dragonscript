@@ -121,6 +121,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 // 		DebugVisitor( session.tokenStream(), QString::fromLatin1( ptext ) ).visitNode( ast );
 		
 		EditorIntegrator editor( session );
+		DUChainReadLocker lock;
 		ExpressionVisitor exprvisitor( editor, pContext.data() );
 		exprvisitor.visitExpression( ast );
 		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
@@ -152,6 +153,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		
 	}else{
 		// completion at the first word. assume context type and declaration
+		DUChainReadLocker lock;
 		completionContext = pContext;
 		completionDecl = pContext->owner();
 		if( completionDecl ){
@@ -167,6 +169,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 	// do completion
 	qDebug() << "DSCodeCompletionCodeBody: completion context " << completionDecl.data()->toString();
 	
+	DUChainReadLocker lock;
 	pCompletionContext = completionContext;
 	pAllDefinitions = completionContext->allDeclarations( CursorInRevision::invalid(), completionContext->topContext(), true );
 	

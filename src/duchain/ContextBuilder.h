@@ -94,6 +94,7 @@ public:
 	void openContextInterface( InterfaceAst *node );
 	void openContextEnumeration( EnumerationAst *node );
 	void openContextClassFunction( ClassFunctionDeclareAst *node );
+	void openContextInterfaceFunction( InterfaceFunctionDeclareAst *node );
 	
 	/*
 	void visitNamespace( NamespaceAst *node ) override;

@@ -49,7 +49,7 @@ end
 class ClassImplement implements ActionListener
 end
 
-class ClassExtendImplement extends ClassExtend implements ActionListener, ColliderListener
+class ClassExtendImplement extends ClassExtend implements InterfaceSimple, ActionListener, ColliderListener
 	public func new( String arg1, bool arg2 )
 	end
 	
@@ -71,7 +71,8 @@ class ClassExtendImplement2 \
 	end
 end
 
-  interface InterfaceEmpty
+  interface InterfaceSimple
+    func int callMe( int value, Block ablock )
 end
 
 interface InterfaceExtend implements ActionListener, ColliderListener

@@ -70,6 +70,7 @@ public:
 	void visitClassVariablesDeclare( ClassVariablesDeclareAst *node ) override;
 	void visitClassFunctionDeclare( ClassFunctionDeclareAst *node ) override;
 	void visitInterface( InterfaceAst *node ) override;
+	void visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ) override;
 	void visitEnumeration( EnumerationAst *node ) override;
 	void visitEnumerationBody( EnumerationBodyAst *node ) override;
 	void visitExpressionBlock( ExpressionBlockAst *node ) override;

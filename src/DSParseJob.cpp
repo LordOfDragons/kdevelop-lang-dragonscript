@@ -73,9 +73,6 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		return;
 	}
 	
-	QReadLocker parselock( languageSupport()->parseLock() );
-	UrlParseLock urlLock( document() );
-	
 	ProblemPointer p = readContents();
 	
 	if( ! ( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) ) && ! isUpdateRequired( languageString ) ){
@@ -99,7 +96,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	}
 // 	qDebug() << "KDevDScript: DSParseJob::run: parsing" << document().str();
 	
-	ReferencedTopDUContext toUpdate = nullptr;
+	ReferencedTopDUContext toUpdate;
 	{
 		DUChainReadLocker lock;
 		toUpdate = standardContextForUrl( document().toUrl() );
@@ -108,12 +105,6 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		translateDUChainToRevision( toUpdate );
 		toUpdate->setRange( RangeInRevision( 0, 0, INT_MAX, INT_MAX ) );
 	}
-	
-	/*if( p ){  // ???
-		//TODO: associate problem with topducontext
-		abortJob();
-		return;
-	}*/
 	
 	ParseSession session( document(), contents().contents );
 // 	session.setDebug( true );
@@ -126,13 +117,16 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		return;
 	}
 	
+// 	QReadLocker parselock( languageSupport()->parseLock() );
+// 	UrlParseLock urlLock( document() );
+	
 	EditorIntegrator editor( session );
 	
 	if( matched ){
 		// set up the declaration builder, it gets the parsePriority so it can re-schedule imported files with a better priority
 		DeclarationBuilder builder( editor, parsePriority(), session );
 		
-		pDUContext = builder.build( document(), ast, toUpdate.data() );
+		pDUContext = builder.build( document(), ast, toUpdate );
 		
 		if( builder.requiresReparsing() ){
 // 			qDebug() << "KDevDScript: DSParseJob::run: Reschedule file" << document().str() << "for parsing";
@@ -158,7 +152,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		
 		// some internal housekeeping work
 		{
-		DUChainWriteLocker lock( DUChain::lock() );
+		DUChainWriteLocker lock;
 		pDUContext->setFeatures( minimumFeatures() );
 		ParsingEnvironmentFilePointer parsingEnvironmentFile = pDUContext->parsingEnvironmentFile();
 		if( parsingEnvironmentFile ){
@@ -181,7 +175,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 // 		qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
 		
 		DUChainWriteLocker lock;
-		pDUContext = toUpdate.data();
+		pDUContext = toUpdate;
 		// if there's already a chain for the document, do some cleanup.
 		if( pDUContext ){
 			ParsingEnvironmentFilePointer parsingEnvironmentFile = pDUContext->parsingEnvironmentFile();
@@ -194,11 +188,9 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		// otherwise, create a new, empty top context for the file. This serves as a placeholder until
 		// the syntax is fixed; for example, it prevents the document from being reparsed again until it is modified.
 		}else{
-			ParsingEnvironmentFile * const file =
-				new ParsingEnvironmentFile( document() );
+			ParsingEnvironmentFile * const file = new ParsingEnvironmentFile( document() );
 			file->setLanguage( languageString );
-			pDUContext = new TopDUContext( document(),
-				RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file );
+			pDUContext = new TopDUContext( document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file );
 			pDUContext->setType( DUContext::Global );
 			DUChain::self()->addDocumentChain( pDUContext );
 			Q_ASSERT( pDUContext->type() == DUContext::Global );
@@ -220,11 +212,8 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	}
 	}
 	
-	// If enabled, and if the document is open, do PEP8 checking.
-	//eventuallyDoPEP8Checking( pDUContext );
-	
 	if( minimumFeatures() & TopDUContext::AST ){
-		DUChainWriteLocker lock;
+// 		DUChainWriteLocker lock;
 		//m_currentSession->ast = m_ast; // ??
 		//pDUContext->setAst( QExplicitlySharedDataPointer<IAstContainer>( session.data() ) ); ??
 	}

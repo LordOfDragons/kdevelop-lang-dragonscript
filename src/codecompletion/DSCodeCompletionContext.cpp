@@ -69,6 +69,7 @@ bool &abort, bool fullCompletion ){
 	if( ! context ){
 		return items;
 	}
+	lock.unlock();
 	
 	// if the end of the expression is located inside a string or comment do nothing.
 	// later on this could be changed for example to allow adding tags in doxygen comments

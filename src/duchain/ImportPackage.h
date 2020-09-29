@@ -48,15 +48,11 @@ public:
 	/**
 	 * List of contexts. If package is not fully parsed yet returns empty list. In this case
 	 * cancel the parsing of the document and schedule it again with a low priority.
-	 * 
-	 * \note DUChainReadLocker required.
 	 */
 	QVector<ReferencedTopDUContext> getContexts();
 	
 	/**
 	 * Add contexts as imports to a top context.
-	 * 
-	 * \note DUChainWriteLocker required.
 	 * 
 	 * \retval true Successfully added contexts.
 	 * \retval false Package is not fully parse yet. Cancel parsing of document and schedule

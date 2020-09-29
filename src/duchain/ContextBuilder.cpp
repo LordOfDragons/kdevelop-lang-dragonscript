@@ -30,11 +30,10 @@ const ReferencedTopDUContext& updateContext ){
 	
 	if( updateContext ){
 // 		qDebug() << "KDevDScript: ContextBuilder::build: rebuilding duchain for" << url.str() << "(was built before)";
-		Q_ASSERT( updateContext->type() == DUContext::Global );
-		updateContext->clearImportedParentContexts();
-		updateContext->parsingEnvironmentFile()->clearModificationRevisions();
-		
 		DUChainWriteLocker lock;
+		Q_ASSERT( updateContext->type() == DUContext::Global );
+// 		updateContext->clearImportedParentContexts();
+		updateContext->parsingEnvironmentFile()->clearModificationRevisions();
 		updateContext->clearProblems();
 		
 	}else{
@@ -61,7 +60,6 @@ void ContextBuilder::startVisiting( AstNode *node ){
 	
 	// if the file belongs to a package add the dependencies of the package
 	if( ownerPackage ){
-		DUChainWriteLocker lock;
 		foreach( const ImportPackage::Ref &each, ownerPackage->dependsOn() ){
 			if( ! pRequiresReparsing ){
 				pRequiresReparsing = ! each->addImports( top );
@@ -70,7 +68,6 @@ void ContextBuilder::startVisiting( AstNode *node ){
 		
 	// otherwise this is a project document
 	}else{
-		DUChainWriteLocker lock;
 		// add language import package
 		if( ! pRequiresReparsing ){
 			pRequiresReparsing = ! ImportPackageLanguage::self()->addImports( top );
@@ -173,11 +170,8 @@ void ContextBuilder::openContextClass( ClassAst *node ){
 		: CursorInRevision::invalid() );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	{
-	DUChainWriteLocker lock;
 	openContext( node, range, DUContext::Class, node->begin->name );
 	currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
-	}
 	
 // 	addImportedContexts();
 }
@@ -194,7 +188,6 @@ void ContextBuilder::openContextInterface( InterfaceAst *node ){
 		: CursorInRevision::invalid() );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	DUChainWriteLocker lock;
 	openContext( node, range, DUContext::Class, node->begin->name );
 	currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
 // 	addImportedContexts();
@@ -212,7 +205,6 @@ void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
 		: CursorInRevision::invalid() );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	DUChainWriteLocker lock;
 	openContext( node, range, DUContext::Enum, node->begin->name );
 	currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
 // 	addImportedContexts();
@@ -229,10 +221,29 @@ void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
 		: pEditor->findPosition( *node->begin->op, EditorIntegrator::BackEdge ) );
 	const CursorInRevision cursorEnd( node->end
 		? pEditor->findPosition( *node->end, EditorIntegrator::FrontEdge )
-		: CursorInRevision::invalid() );
+		: pEditor->findPosition( node->begin->endToken, EditorIntegrator::BackEdge ) );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	DUChainWriteLocker lock;
+	openContext( node, range, DUContext::Function, node->begin->name );
+	
+	if( node->begin->name ){
+		currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
+		
+	}else if( node->begin->op ){
+		currentContext()->setLocalScopeIdentifier( identifierForToken( node->begin->op->op ) );
+	}
+// 	addImportedContexts();
+}
+
+void ContextBuilder::openContextInterfaceFunction( InterfaceFunctionDeclareAst *node ){
+	// context starts at the end of the declaration
+	const CursorInRevision cursorBegin( node->begin->name
+		? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )
+		: pEditor->findPosition( *node->begin->op, EditorIntegrator::BackEdge ) );
+	const CursorInRevision cursorEnd(
+		pEditor->findPosition( node->begin->endToken, EditorIntegrator::BackEdge ) );
+	const RangeInRevision range( cursorBegin, cursorEnd );
+	
 	openContext( node, range, DUContext::Function, node->begin->name );
 	
 	if( node->begin->name ){

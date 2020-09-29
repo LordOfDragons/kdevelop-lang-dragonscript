@@ -358,7 +358,15 @@ INTERFACE name=identifier
 	endOfCommand
 -> interfaceBegin ;;
 
-#modifiers=typeModifier* ( aclass=class | interface=interface | enumeration=enumeration )
+FUNC begin=classFunctionDeclareBegin
+-> interfaceFunctionDeclare ;;
+
+#modifiers=typeModifier*
+	( aclass=class
+	| interface=interface
+	| enumeration=enumeration
+	| function=interfaceFunctionDeclare
+	)
 -> interfaceBodyDeclaration ;;
 
 interfaceBodyDeclaration | empty=endOfCommand

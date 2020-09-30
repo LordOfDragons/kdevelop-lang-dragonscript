@@ -123,20 +123,12 @@ protected:
 	
 	/** \brief Simplify common calls. */
 	void encounterDecl( Declaration &decl );
-	void encounterObject();
-	void encounterBool();
-	void encounterByte();
-	void encounterInt();
-	void encounterFloat();
-	void encounterString();
-	void encounterBlock();
+	void encounterInternalType( const QualifiedIdentifier &identifier );
 	
 	/** \brief Check function call. */
-	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-		const AbstractType::Ptr &argument );
+	void checkFunctionCall( AstNode &node, const DUContext &context, const AbstractType::Ptr &argument );
 	
-	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> ctx,
-		const QVector<AbstractType::Ptr> &signature );
+	void checkFunctionCall( AstNode &node, const DUContext &ctx, const QVector<AbstractType::Ptr> &signature );
 	
 	/**
 	 * \brief Clear last type and declaration the visit node.

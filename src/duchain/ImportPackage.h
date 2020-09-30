@@ -18,21 +18,6 @@ namespace DragonScript {
  */
 class ImportPackage{
 public:
-	/** Mode. */
-	enum class Mode{
-		/** Package has not started parsing. */
-		Pending,
-		
-		/** Package is parsing and building declarations. */
-		Parsing,
-		
-		/** Package is building uses. */
-		BuildUses,
-		
-		/** Package is ready. */
-		Ready
-	};
-	
 	/** Typedef shared pointer. */
 	typedef QSharedPointer<ImportPackage> Ref;
 	
@@ -63,38 +48,21 @@ public:
 	/**
 	 * List of contexts. If package is not fully parsed yet returns empty list. In this case
 	 * cancel the parsing of the document and schedule it again with a low priority.
-	 */
-	const QVector<ReferencedTopDUContext> &getContexts();
-	
-	/**
-	 * Ensure the package is ready to be used for parsing. Starts parsing the files until
-	 * all contexts are ready.
 	 * 
-	 * \retval true Package is ready to be used for parsing.
-	 * \retval false Package is not fully parse yet. Cancel parsing of document and schedule
-	 *               it again with a low priority.
+	 * \note DUChainReadLocker required.
 	 */
-	bool ensureReady();
-	
-	/**
-	 * Add contexts as imports to a top context.
-	 * 
-	 * \retval true Successfully added contexts.
-	 * \retval false Package is not fully parse yet. Cancel parsing of document and schedule
-	 *               it again with a low priority.
-	 */
-	bool addImports( TopDUContext *context );
-	
-	/**
-	 * Drop contexts.
-	 */
-	void dropContexts();
+	QVector<TopDUContext*> contexts();
 	
 	/**
 	 * Packages this package depends on.
 	 */
 	inline QVector<Ref> dependsOn(){ return pDependsOn; }
 	inline const QVector<Ref> &dependsOn() const{ return pDependsOn; }
+	
+	/**
+	 * Reparse files.
+	 */
+	void reparse();
 	
 	
 	
@@ -105,8 +73,6 @@ protected:
 	
 	QString pName;
 	QVector<IndexedString> pFiles;
-	QVector<ReferencedTopDUContext> pContexts;
-	Mode pMode;
 	
 	QVector<Ref> pDependsOn;
 	

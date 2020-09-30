@@ -33,14 +33,28 @@ void ContextBuilder::setRequiresRebuild( bool rebuild ){
 void ContextBuilder::startVisiting( AstNode *node ){
 // 	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
 	// add depdencies as imports
-	foreach( const ImportPackage::Ref &each, dependencies() ){
-// 		qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
-		if( ! each->addImports( topContext() ) ){
-// 			qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
-// 				<< each->name() << " as import for" << document();
-			setRequiresRebuild( true );
-			return;
+	if( ! dependencies().isEmpty() ){
+		DUChainWriteLocker lock;
+		TopDUContext * const top = topContext();
+		QVector<QPair<TopDUContext*, CursorInRevision>> imports;
+		
+		foreach( const ImportPackage::Ref &each, dependencies() ){
+// 			qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
+			
+			const QVector<TopDUContext*> contexts( each->contexts() );
+			if( contexts.isEmpty() ){
+// 				qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
+// 					<< each->name() << " as import for" << document();
+				setRequiresRebuild( true );
+				return;
+			}
+			
+			foreach( TopDUContext *each, contexts ){
+				imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
+			}
 		}
+		
+		top->addImportedParentContexts( imports );
 	}
 	
 	// visit node to start building
@@ -169,7 +183,6 @@ void ContextBuilder::openContextInterfaceFunction( InterfaceFunctionDeclareAst *
 	
 	openContext( node, range, DUContext::Function, node->begin->name );
 	
-	https://www.whatsmyip.org/
 	if( node->begin->name ){
 		currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
 		

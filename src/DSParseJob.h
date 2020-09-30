@@ -45,7 +45,6 @@ protected:
 	void prepareTopContext();
 	void findPackage();
 	void findDependencies();
-	bool ensureDependencies();
 	void reparseLater( int addFeatures = 0 );
 	bool buildDeclaration( EditorIntegrator &editor );
 	bool buildUses( EditorIntegrator &editor );

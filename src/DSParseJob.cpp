@@ -93,18 +93,9 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		
 		// dragonscript works a bit different than other languages. script files always
 		// belong to a namespace and all files in the namespace are visible without
-		// needing an import statement. this requires parsing and declaration building
-		// to be done for all files in a package before uses can be build
+		// needing an import statement
 		findPackage();
 		findDependencies();
-		
-		if( ! ensureDependencies() ){
-			reparseLater();
-			return;
-		}
-		if( checkAbort() ){
-			return;
-		}
 		
 // 		qDebug() << "DSParseJob.run: dependencies ready for" << document();
 		EditorIntegrator editor( session );
@@ -259,18 +250,6 @@ void DSParseJob::findDependencies(){
 		}
 		pDependencies << package;
 	}
-}
-
-bool DSParseJob::ensureDependencies(){
-	// make sure all required packages have been parsed and prepared
-	bool ready = true;
-	foreach( const ImportPackage::Ref &each, pDependencies ){
-		if( ! each->ensureReady() ){
-// 			qDebug() << "DSParseJob.run: depdendy" << each->name() << "not ready for" << document();
-			ready = false;
-		}
-	}
-	return ready;
 }
 
 void DSParseJob::reparseLater( int addFeatures ){

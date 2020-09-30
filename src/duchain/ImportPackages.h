@@ -47,14 +47,14 @@ public:
 	void addPackage( const ImportPackage::Ref &package );
 	
 	/**
-	 * Drop contexts of named import package if present.
+	 * Reparse files of named import package if present.
 	 */
-	void dropContextsNamed( const QString &name );
+	void reparseNamed( const QString &name );
 	
 	/**
-	 * Drop contexts of all import packages.
+	 * Reparse all import packages.
 	 */
-	void dropAllContexts();
+	void reparseAll();
 };
 
 }

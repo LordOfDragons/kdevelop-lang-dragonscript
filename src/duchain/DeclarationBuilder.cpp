@@ -216,13 +216,13 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 		}
 		
 	}else if( document() != Helpers::getDocumentationFileObject() ){
-		// set object as base class. this is only done if this is not the object class from
-		// the documentation being parsed
+		// set object as base class. this is only done if this is not the object class
+		// from the documentation being parsed
 		DUChainReadLocker lock;
-		const AbstractType::Ptr typeObject( Helpers::getTypeObject() );
-		if( typeObject ){
+		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
+		if( typeDecl && typeDecl->abstractType() ){
 			BaseClassInstance base;
-			base.baseClass = typeObject->indexed();
+			base.baseClass = typeDecl->abstractType()->indexed();
 			base.access = Declaration::Public;
 			decl->addBaseClass( base );
 		}
@@ -365,7 +365,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	}else{
 		// used only for constructors. return type is the object class type
 		DUChainReadLocker lock;
-		const Declaration * const classDecl = Helpers::classDeclFor( DUChainPointer<const DUContext>( decl->context() ) );
+		const Declaration * const classDecl = Helpers::classDeclFor( *decl->context() );
 		if( classDecl ){
 			funcType->setReturnType( classDecl->abstractType() );
 		}
@@ -424,10 +424,10 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	// set object as base class
 	{
 	DUChainReadLocker lock;
-	const AbstractType::Ptr typeObject( Helpers::getTypeObject() );
-	if( typeObject ){
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
+	if( typeDecl && typeDecl->abstractType() ){
 		BaseClassInstance base;
-		base.baseClass = typeObject->indexed();
+		base.baseClass = typeDecl->abstractType()->indexed();
 		base.access = Declaration::Public;
 		decl->addBaseClass( base );
 	}
@@ -562,10 +562,10 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	// the documentation being parsed
 	{
 	DUChainReadLocker lock;
-	const AbstractType::Ptr typeEnumeration( Helpers::getTypeEnumeration() );
-	if( typeEnumeration ){
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeEnumeration() );
+	if( typeDecl && typeDecl->abstractType() ){
 		BaseClassInstance base;
-		base.baseClass = typeEnumeration->indexed();
+		base.baseClass = typeDecl->abstractType()->indexed();
 		base.access = Declaration::Public;
 		decl->addBaseClass( base );
 	}
@@ -600,7 +600,7 @@ void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
 	// type is the enumeration class
 	{
 	DUChainReadLocker lock;
-	const Declaration * const enumDecl = Helpers::classDeclFor( DUChainPointer<const DUContext>( decl->context() ) );
+	const Declaration * const enumDecl = Helpers::classDeclFor( *decl->context() );
 	if( enumDecl ){
 		decl->setType( enumDecl->abstractType() );
 	}

@@ -29,7 +29,6 @@ class KDEVDSDUCHAIN_EXPORT DeclarationBuilder : public DeclarationBuilderBase{
 private:
 	const ParseSession &pParseSession;
 	QList<bool> pNamespaceContexts;
-	QVector<DUChainPointer<const DUContext>> pPinned;
 	int pLastModifiers;
 	
 	
@@ -41,9 +40,6 @@ public:
 	
 	/** Close namespace contexts. */
 	void closeNamespaceContexts();
-	
-	/** Pinned namespaces. */
-	inline const QVector<DUChainPointer<const DUContext>> &GetPinned(){ return pPinned; }
 	
 	/**
 	 * Find all existing declarations for the identifier \p node.

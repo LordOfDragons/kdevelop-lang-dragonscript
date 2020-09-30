@@ -21,7 +21,7 @@ typedef AbstractUseBuilder<AstNode, Identifier, ContextBuilder> UseBuilderBase;
 class KDEVDSDUCHAIN_EXPORT UseBuilder : public UseBuilderBase{
 private:
 	ParseSession &pParseSession;
-	DUChainPointer<const DUContext> pCurExprContext;
+	DUContext *pCurExprContext;
 	AbstractType::Ptr pCurExprType;
 	bool pEnableErrorReporting;
 	bool pAllowVoidType;
@@ -71,25 +71,22 @@ protected:
 	 * Find context for function call object.
 	 * \note Internally locks DUChainReadLocker.
 	 */
-	DUChainPointer<const DUContext> functionGetContext( AstNode *node,
-		DUChainPointer<const DUContext> context );
+	DUContext *functionGetContext( AstNode *node, DUContext *context );
 	
 	/** Type of node using ExpressionVisitor. */
-	AbstractType::Ptr typeOfNode( AstNode *node, DUChainPointer<const DUContext> context );
+	AbstractType::Ptr typeOfNode( AstNode *node, DUContext *context );
 	
 	/**
 	 * Check function call.
 	 * \note Internally locks DUChainReadLocker.
 	 */
-	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-		const AbstractType::Ptr &argument );
+	void checkFunctionCall( AstNode *node, DUContext *context, const AbstractType::Ptr &argument );
 	
 	/**
 	 * Check function call.
 	 * \note Internally locks DUChainReadLocker.
 	 */
-	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-		const QVector<AbstractType::Ptr> &signature );
+	void checkFunctionCall( AstNode *node, DUContext *context, const QVector<AbstractType::Ptr> &signature );
 	
 	/**
 	 * Report semantic error if reporting is enabled.

@@ -50,7 +50,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 		return;
 	}
 	
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
+	const DUContext *context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
@@ -69,7 +69,8 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			
 			if( context ){
 				DUChainReadLocker lock;
-				decl = Helpers::declarationForName( name, CursorInRevision( INT_MAX, INT_MAX ), context );
+				const IndexedIdentifier identifier( (Identifier( name )) );
+				decl = Helpers::declarationForName( identifier, CursorInRevision( INT_MAX, INT_MAX ), *context );
 				context = nullptr;
 			}
 			
@@ -101,7 +102,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 }
 
 void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
+	const DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	// overwritten to allow void type in FullyQualifiedClassnameAst
 	pAllowVoidType = true;
@@ -126,19 +127,18 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	
 	// find this/super class constructors
 	const RangeInRevision useRange( editor()->findRange( node->super ) );
-	DUChainPointer<const DUContext> superContext( context );
+	const DUContext *superContext = context;
 	QVector<Declaration*> declarations;
 	
 	DUChainReadLocker lock;
-	const TopDUContext *top = topContext();
+	const TopDUContext &top = *topContext();
 	
 	if( superContext && isSuper ){
-		const ClassDeclaration *classDecl = Helpers::classDeclFor(
-			DUChainPointer<const DUContext>( superContext->parentContext() ) );
+		const ClassDeclaration *classDecl = Helpers::classDeclFor( superContext->parentContext() );
 		superContext = nullptr;
 		
 		if( classDecl ){
-			classDecl = Helpers::superClassOf( top, classDecl );
+			classDecl = Helpers::superClassOf( top, *classDecl );
 			if( classDecl ){
 				superContext = classDecl->internalContext();
 			}
@@ -146,7 +146,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	}
 	
 	if( superContext ){
-		declarations = Helpers::constructorsInClass( superContext );
+		declarations = Helpers::constructorsInClass( *superContext );
 	}
 	lock.unlock();
 	
@@ -172,7 +172,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	
 	// find best matching function
 	lock.lock();
-	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( top, signature, declarations );
+	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( signature, declarations );
 	
 	if( ! useFunction ){
 		// find functions matching with auto-casting
@@ -192,8 +192,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 				problem->setSource( IProblem::SemanticAnalysis );
 				problem->setSeverity( IProblem::Hint );
 				
-				const ClassDeclaration * const classDecl = Helpers::classDeclFor(
-					DUChainPointer<const DUContext>( each->context() ) );
+				const ClassDeclaration * const classDecl = Helpers::classDeclFor( each->context() );
 				if( classDecl ){
 					problem->setDescription( i18n( "Candidate: %1.%2",
 						classDecl->identifier().toString(), each->toString() ) );
@@ -299,7 +298,7 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 }
 
 void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
-	DUChainPointer<const DUContext> context( pCurExprContext );
+	DUContext *context = pCurExprContext;
 	
 	if( node->funcCall != -1 ){
 		// process function arguments building signature at the same time
@@ -325,25 +324,26 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		checkFunctionCall( node->name, context, signature );
 		
 	}else{
-		const QString name( editor()->tokenText( *node->name ) );
+		const IndexedIdentifier identifier( Identifier( editor()->tokenText( *node->name ) ) );
 		QVector<Declaration*> declarations;
 		DUChainReadLocker lock;
 		if( context ){
-			declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
+			declarations = Helpers::declarationsForName(
+				identifier, editor()->findPosition( *node ), *context );
 		}
 		
 		if( declarations.isEmpty() ){
 			// if the context is not a class context we are at the beginning of an expression
 			// and auto-this has to be used. find the this-context and try again
 			if( context && ! dynamic_cast<ClassDeclaration*>( context->owner() ) ){
-				const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor(
-					DUChainPointer<const DUContext>( context ) );
+				const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *context );
 				if( classDecl ){
 					context = classDecl->internalContext();
 				}
 				
 				if( context ){
-					declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
+					declarations = Helpers::declarationsForName(
+						identifier, editor()->findPosition( *node ), *context );
 				}
 			}
 		}
@@ -356,10 +356,11 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			
 			if( classDecl ){
 				reportSemanticError( useRange, i18n( "Unknown object: %1.%2",
-					classDecl->identifier().toString(), name ) );
+					classDecl->identifier().toString(), identifier.identifier().toString() ) );
 				
 			}else{
-				reportSemanticError( useRange, i18n( "Unknown object: %1", name ) );
+				reportSemanticError( useRange, i18n( "Unknown object: %1",
+					identifier.identifier().toString() ) );
 			}
 			UseBuilderBase::visitExpressionMember( node );
 			pCurExprContext = nullptr;
@@ -369,8 +370,7 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		
 		Declaration *declaration = declarations.at( 0 );
 		if( dynamic_cast<ClassFunctionDeclaration*>( declaration ) ){
-			const ClassDeclaration * const classDecl = Helpers::classDeclFor(
-				DUChainPointer<const DUContext>( declaration->context() ) );
+			const ClassDeclaration * const classDecl = Helpers::classDeclFor( declaration->context() );
 			lock.unlock();
 			
 			if( classDecl ){
@@ -406,23 +406,21 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 void UseBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 	UseBuilderBase::visitExpressionBlock( node );
 	
-	DeclarationPointer declBlock;
-	AbstractType::Ptr typeBlock;
 	DUChainReadLocker lock;
-	Helpers::getTypeBlock( declBlock, typeBlock );
-	
-	if( declBlock ){
-		pCurExprContext = declBlock->internalContext();
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBlock() );
+	if( typeDecl && typeDecl->abstractType() ){
+		pCurExprContext = typeDecl->internalContext();
+		pCurExprType = typeDecl->abstractType();
 		
 	}else{
 		pCurExprContext = nullptr;
+		pCurExprType = nullptr;
 	}
-	pCurExprType = typeBlock;
 }
 
 void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -438,8 +436,8 @@ void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
 }
 
 void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -447,7 +445,7 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 	
 	const KDevPG::ListNode<ExpressionAssignMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionAssignMoreAst*> *end = iter;
-	const TopDUContext * const top = topContext();
+	const TopDUContext &top = *topContext();
 	
 	do{
 		bool isAssign = false;
@@ -480,8 +478,8 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 }
 
 void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -497,8 +495,8 @@ void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
 }
 
 void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -506,7 +504,7 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 	
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *end = iter;
-	const TopDUContext * const top = topContext();
+	const TopDUContext &top = *topContext();
 	
 	do{
 		bool isEquals = false;
@@ -532,8 +530,15 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 				lock.lock();
 			}
 			
-			pCurExprType = Helpers::getTypeBool();
-			pCurExprContext = Helpers::contextForType( top, pCurExprType );
+			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
+			if( typeDecl && typeDecl->abstractType() ){
+				pCurExprType = typeDecl->abstractType();
+				pCurExprContext = typeDecl->internalContext();
+				
+			}else{
+				pCurExprType = nullptr;
+				pCurExprContext = nullptr;
+			}
 			contextLeft = pCurExprContext;
 			
 		}else{
@@ -546,8 +551,7 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 }
 
 void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -555,10 +559,14 @@ void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 	
 	const KDevPG::ListNode<ExpressionLogicMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionLogicMoreAst*> *end = iter;
-	const TopDUContext * const top = topContext();
+	const TopDUContext &top = *topContext();
 	
 	DUChainReadLocker lock;
-	AbstractType::Ptr typeBool( Helpers::getTypeBool() );
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
+	AbstractType::Ptr typeBool;
+	if( typeDecl ){
+		typeBool = typeDecl->abstractType();
+	}
 	
 	do{
 		lock.unlock();
@@ -582,15 +590,14 @@ void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 		
 		pCurExprType = typeBool;
 		pCurExprContext = Helpers::contextForType( top, typeBool );
-		contextLeft = pCurExprContext;
 		
 		iter = iter->next;
 	}while( iter != end );
 }
 
 void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -606,8 +613,8 @@ void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
 }
 
 void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
- 	DUChainPointer<const DUContext> contextLeft( functionGetContext( node->left, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+ 	DUContext *contextLeft = functionGetContext( node->left, context );
 	
 	if( ! node->opSequence ){
 		return;
@@ -623,7 +630,7 @@ void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
 }
 
 void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	pCurExprContext = context;
 	pCurExprType = nullptr;
@@ -648,7 +655,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
 				if( context ){
 					DUChainReadLocker lock;
-					ExpressionVisitor exprValue( *editor(), context.data() );
+					ExpressionVisitor exprValue( *editor(), context );
 					exprValue.visitNode( iter->element->type );
 					const DeclarationPointer declaration( exprValue.lastDeclaration() );
 					if( declaration ){
@@ -661,14 +668,16 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 				}
 				
 			}else{
-				DeclarationPointer classDeclBool;
-				AbstractType::Ptr typeBool;
 				DUChainReadLocker lock;
-				Helpers::getTypeBool( classDeclBool, typeBool );
-				if( classDeclBool ){
-					pCurExprContext = classDeclBool->internalContext();
+				Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
+				if( typeDecl && typeDecl->abstractType() ){
+					pCurExprContext = typeDecl->internalContext();
+					pCurExprType = typeDecl->abstractType();
+					
+				}else{
+					pCurExprContext = nullptr;
+					pCurExprType = nullptr;
 				}
-				pCurExprType = typeBool;
 			}
 		}
 		
@@ -677,8 +686,8 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 }
 
 void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
-	DUChainPointer<const DUContext> contextRight( functionGetContext( node->right, context ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *contextRight = functionGetContext( node->right, context );
 	
 	if( ! node->opSequence ){
 		return;
@@ -699,7 +708,7 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 }
 
 void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
-	DUChainPointer<const DUContext> context( contextAtOrCurrent( editor()->findPosition( *node ) ) );
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	AbstractType::Ptr typeCondition( typeOfNode( node->condition, context ) );
 	
 	if( ! node->more ){
@@ -708,10 +717,10 @@ void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
 	
 	AbstractType::Ptr typeIf( typeOfNode( node->more->expressionIf, context ) );
 	AbstractType::Ptr typeElse( typeOfNode( node->more->expressionElse, context ) );
-	const TopDUContext * const top = topContext();
+	const TopDUContext &top = *topContext();
 	
 	DUChainReadLocker lock;
-	if( ! Helpers::castable( top, typeCondition, Helpers::getTypeBool() ) ){
+	if( ! Helpers::equalsInternal( typeCondition, Helpers::getTypeBool() ) ){
 		lock.unlock();
 		reportSemanticError( editor()->findRange( *node->condition ),
 			i18n( "Cannot assign object of type %1 to bool", typeCondition ? typeCondition->toString() : "??" ) );
@@ -741,12 +750,7 @@ void UseBuilder::visitStatementFor( StatementForAst *node ){
 
 
 
-DUChainPointer<const DUContext> UseBuilder::functionGetContext( AstNode *node,
-DUChainPointer<const DUContext> context ){
-	if( ! node ){
-		return {};
-	}
-	
+DUContext *UseBuilder::functionGetContext( AstNode *node, DUContext *context ){
 	pCurExprContext = context;
 	pCurExprType = nullptr;
 	visitNode( node );
@@ -758,12 +762,12 @@ DUChainPointer<const DUContext> context ){
 	DUChainReadLocker lock;
 	const ClassDeclaration * const classDecl = Helpers::classDeclFor( pCurExprContext );
 	if( classDecl ){
-		return DUChainPointer<const DUContext>( classDecl->internalContext() );
+		return classDecl->internalContext();
 	}
 	return {};
 }
 
-AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUChainPointer<const DUContext> context ){
+AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUContext *context ){
 	if( node ){
 		pCurExprContext = context;
 		pCurExprType = nullptr;
@@ -777,25 +781,21 @@ AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUChainPointer<const DU
 	return type;
 }
 
-void UseBuilder::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-const AbstractType::Ptr &argument ){
+void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const AbstractType::Ptr &argument ){
 	QVector<AbstractType::Ptr> signature;
 	signature.append( argument );
 	checkFunctionCall( node, context, signature );
 }
 
-void UseBuilder::checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
-const QVector<AbstractType::Ptr> &signature ){
-	const QString name( editor()->tokenText( *node ) );
+void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVector<AbstractType::Ptr> &signature ){
+	const IndexedIdentifier identifier( Identifier( editor()->tokenText( *node ) ) );
 	const RangeInRevision useRange( editor()->findRange( *node ) );
 	
 	QVector<Declaration*> declarations;
 	if( context ){
 		DUChainReadLocker lock;
-		declarations = Helpers::declarationsForName( name, editor()->findPosition( *node ), context );
+		declarations = Helpers::declarationsForName( identifier, editor()->findPosition( *node ), *context );
 	}
-	
-	const TopDUContext * const top = topContext();
 	
 	if( declarations.isEmpty() ){
 		DUChainReadLocker lock;
@@ -804,10 +804,11 @@ const QVector<AbstractType::Ptr> &signature ){
 		
 		if( classDecl ){
 			reportSemanticError( useRange, i18n( "Unknown function: %1.%2",
-				classDecl->identifier().toString(), name ) );
+				classDecl->identifier().toString(), identifier.identifier().toString() ) );
 			
 		}else{
-			reportSemanticError( useRange, i18n( "Unknown function: %1", name ) );
+			reportSemanticError( useRange, i18n( "Unknown function: %1",
+				identifier.identifier().toString() ) );
 		}
 		
 		pCurExprContext = nullptr;
@@ -823,10 +824,11 @@ const QVector<AbstractType::Ptr> &signature ){
 		
 		if( classDecl ){
 			reportSemanticError( useRange, i18n( "Expected function but found object: %1.%2",
-				classDecl->identifier().toString(), name ) );
+				classDecl->identifier().toString(), identifier.identifier().toString() ) );
 			
 		}else{
-			reportSemanticError( useRange, i18n( "Expected function but found object: %1", name ) );
+			reportSemanticError( useRange, i18n( "Expected function but found object: %1",
+				identifier.identifier().toString() ) );
 		}
 		
 		pCurExprContext = nullptr;
@@ -835,9 +837,10 @@ const QVector<AbstractType::Ptr> &signature ){
 	}
 	
 	// find best matching function
-	DUChainReadLocker lock;
-	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( top, signature, declarations );
+	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( signature, declarations );
+	const TopDUContext &top = *topContext();
 	
+	DUChainReadLocker lock;
 	if( ! useFunction ){
 		// find functions matching with auto-casting
 		const QVector<ClassFunctionDeclaration*> possibleFunctions(
@@ -868,7 +871,7 @@ const QVector<AbstractType::Ptr> &signature ){
 			}
 			
 			const char *separator = "";
-			QString sig( name + "(" );
+			QString sig( identifier.identifier().toString() + "(" );
 			foreach( const AbstractType::Ptr &each, signature ){
 				sig.append( separator ).append( each->toString() );
 				separator = ", ";
@@ -899,14 +902,14 @@ const QVector<AbstractType::Ptr> &signature ){
 			useFunction->type<FunctionType>()->returnType() );
 		if( structType ){
 			lock.lock();
-			pCurExprContext = structType->internalContext( top );
+			pCurExprContext = structType->internalContext( &top );
 		}
 		pCurExprType = useFunction->type<FunctionType>()->returnType();
 		return;
 	}
 	
 	const char *separator = "";
-	QString sig( name + "(" );
+	QString sig( identifier.identifier().toString() + "(" );
 	foreach( const AbstractType::Ptr &each, signature ){
 		sig.append( separator ).append( each->toString() );
 		separator = ", ";

@@ -19,20 +19,10 @@
 #include "items/DSCodeCompletionItem.h"
 
 
-using KDevelop::CodeCompletionWorker;
-using KDevelop::CodeCompletionContext;
-using KDevelop::CompletionTreeItemPointer;
-using KDevelop::CursorInRevision;
-using KDevelop::DUContext;
-using KDevelop::DUContextPointer;
-using KDevelop::DUChainReadLocker;
-using KDevelop::Use;
-using KDevelop::StructureType;
+using namespace KDevelop;
 
 using KTextEditor::Range;
 using KTextEditor::View;
-
-
 
 namespace DragonScript {
 
@@ -130,7 +120,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		}
 		
 		/*
-		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == KDevelop::AbstractType::TypeStructure ){
+		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 			qDebug() << "DSCodeCompletionCodeBody: completion type " << exprvisitor.lastType()->toString()
 				<< "declaration " << ( exprvisitor.lastDeclaration().data() ? exprvisitor.lastDeclaration().data()->toString() : "-" );
 		}

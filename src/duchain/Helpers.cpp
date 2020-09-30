@@ -43,276 +43,74 @@ namespace DragonScript {
 IndexedString Helpers::documentationFileObject;
 IndexedString Helpers::documentationFileEnumeration;
 
-AbstractType::Ptr Helpers::pTypeVoid;
-AbstractType::Ptr Helpers::pTypeNull;
-AbstractType::Ptr Helpers::pTypeInvalid;
+const AbstractType::Ptr Helpers::pTypeVoid( new IntegralType( IntegralType::TypeVoid ) );
+const AbstractType::Ptr Helpers::pTypeNull( new IntegralType( IntegralType::TypeNull ) );
+const AbstractType::Ptr Helpers::pTypeInvalid( new IntegralType( IntegralType::TypeMixed ) );
 
-AbstractType::Ptr Helpers::pTypeByte;
-AbstractType::Ptr Helpers::pTypeBool;
-AbstractType::Ptr Helpers::pTypeInt;
-AbstractType::Ptr Helpers::pTypeFloat;
-AbstractType::Ptr Helpers::pTypeString;
-AbstractType::Ptr Helpers::pTypeObject;
-AbstractType::Ptr Helpers::pTypeBlock;
-AbstractType::Ptr Helpers::pTypeEnumeration;
-
-DeclarationPointer Helpers::pTypeDeclByte;
-DeclarationPointer Helpers::pTypeDeclBool;
-DeclarationPointer Helpers::pTypeDeclInt;
-DeclarationPointer Helpers::pTypeDeclFloat;
-DeclarationPointer Helpers::pTypeDeclString;
-DeclarationPointer Helpers::pTypeDeclObject;
-DeclarationPointer Helpers::pTypeDeclBlock;
-DeclarationPointer Helpers::pTypeDeclEnumeration;
+const QualifiedIdentifier Helpers::pTypeByte( "byte" );
+const QualifiedIdentifier Helpers::pTypeBool( "bool" );
+const QualifiedIdentifier Helpers::pTypeInt( "int" );
+const QualifiedIdentifier Helpers::pTypeFloat( "float" );
+const QualifiedIdentifier Helpers::pTypeString( "String" );
+const QualifiedIdentifier Helpers::pTypeObject( "Object" );
+const QualifiedIdentifier Helpers::pTypeBlock( "Block" );
+const QualifiedIdentifier Helpers::pTypeEnumeration( "Enumeration" );
 
 static const Identifier nameConstructor( "new" );
 
 
 
-AbstractType::Ptr Helpers::getTypeVoid(){
-	if( ! pTypeVoid ){
-		pTypeVoid = new IntegralType( IntegralType::TypeVoid );
-	}
-	return pTypeVoid;
-}
-
-AbstractType::Ptr Helpers::getTypeNull(){
-	if( ! pTypeNull ){
-		pTypeNull = new IntegralType( IntegralType::TypeNull );
-	}
-	return pTypeNull;
-}
-
-AbstractType::Ptr Helpers::getTypeInvalid(){
-	if( ! pTypeInvalid ){
-		pTypeInvalid = new IntegralType( IntegralType::TypeMixed );
-	}
-	return pTypeInvalid;
-}
-
-AbstractType::Ptr Helpers::getTypeByte(){
-	if( ! pTypeDeclByte ){
-		pTypeDeclByte = getInternalTypeDeclaration( "byte" );
-		if( pTypeDeclByte ){
-			pTypeByte = pTypeDeclByte->abstractType();
-		}
-	}
-	
-	if( ! pTypeByte ){
-		pTypeByte = new IntegralType( IntegralType::TypeByte );
-	}
-	
-	return pTypeByte;
-}
-
-AbstractType::Ptr Helpers::getTypeBool(){
-	if( ! pTypeDeclBool ){
-		pTypeDeclBool = getInternalTypeDeclaration( "bool" );
-		if( pTypeDeclBool ){
-			pTypeBool = pTypeDeclBool->abstractType();
-		}
-	}
-	
-	if( ! pTypeBool ){
-		pTypeBool = new IntegralType( IntegralType::TypeBoolean );
-	}
-	
-	return pTypeBool;
-}
-
-AbstractType::Ptr Helpers::getTypeInt(){
-	if( ! pTypeDeclInt ){
-		pTypeDeclInt = getInternalTypeDeclaration( "int" );
-		if( pTypeDeclInt ){
-			pTypeInt = pTypeDeclInt->abstractType();
-		}
-	}
-	
-	if( ! pTypeInt ){
-		pTypeInt = new IntegralType( IntegralType::TypeInt );
-	}
-	
-	return pTypeInt;
-}
-
-AbstractType::Ptr Helpers::getTypeFloat(){
-	if( ! pTypeDeclFloat ){
-		pTypeDeclFloat = getInternalTypeDeclaration( "float" );
-		if( pTypeDeclFloat ){
-			pTypeFloat = pTypeDeclFloat->abstractType();
-		}
-	}
-	
-	if( ! pTypeFloat ){
-		pTypeFloat = new IntegralType( IntegralType::TypeFloat );
-	}
-	
-	return pTypeFloat;
-}
-
-AbstractType::Ptr Helpers::getTypeString(){
-	if( ! pTypeDeclString ){
-		pTypeDeclString = getInternalTypeDeclaration( "String" );
-		if( pTypeDeclString ){
-			pTypeString = pTypeDeclString->abstractType();
-		}
-	}
-	
-	if( ! pTypeString ){
-		pTypeString = new IntegralType( IntegralType::TypeString );
-	}
-	
-	return pTypeString;
-}
-
-AbstractType::Ptr Helpers::getTypeObject(){
-	if( ! pTypeDeclObject ){
-		pTypeDeclObject = getInternalTypeDeclaration( "Object" );
-		if( pTypeDeclObject ){
-			pTypeObject = pTypeDeclObject->abstractType();
-		}
-	}
-	
-	if( ! pTypeObject ){
-		pTypeObject = new IntegralType( IntegralType::TypeMixed );
-	}
-	
-	return pTypeObject;
-}
-
-AbstractType::Ptr Helpers::getTypeBlock(){
-	if( ! pTypeDeclBlock ){
-		pTypeDeclBlock = getInternalTypeDeclaration( "Block" );
-		if( pTypeDeclBlock ){
-			pTypeBlock = pTypeDeclBlock->abstractType();
-		}
-	}
-	
-	if( ! pTypeBlock ){
-		pTypeBlock = new IntegralType( IntegralType::TypeMixed );
-	}
-	
-	return pTypeBlock;
-}
-
-AbstractType::Ptr Helpers::getTypeEnumeration(){
-	if( ! pTypeDeclEnumeration ){
-		pTypeDeclEnumeration = getInternalTypeDeclaration( "Enumeration" );
-		if( pTypeDeclEnumeration ){
-			pTypeEnumeration = pTypeDeclEnumeration->abstractType();
-		}
-	}
-	
-	if( ! pTypeEnumeration ){
-		pTypeEnumeration = new IntegralType( IntegralType::TypeMixed );
-	}
-	
-	return pTypeEnumeration;
-}
-
-void Helpers::getTypeByte( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeByte();
-	declaration = pTypeDeclByte;
-}
-
-void Helpers::getTypeBool( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeBool();
-	declaration = pTypeDeclBool;
-}
-
-void Helpers::getTypeInt( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeInt();
-	declaration = pTypeDeclInt;
-}
-
-void Helpers::getTypeFloat( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeFloat();
-	declaration = pTypeDeclFloat;
-}
-
-void Helpers::getTypeString( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeString();
-	declaration = pTypeDeclString;
-}
-
-void Helpers::getTypeObject( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeObject();
-	declaration = pTypeDeclObject;
-}
-
-void Helpers::getTypeBlock( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeBlock();
-	declaration = pTypeDeclBlock;
-}
-
-void Helpers::getTypeEnumeration( DeclarationPointer &declaration, AbstractType::Ptr &type ){
-	type = getTypeEnumeration();
-	declaration = pTypeDeclEnumeration;
-}
-
-
-
-DUChainPointer<const DUContext> Helpers::contextForType( const TopDUContext *top, const AbstractType::Ptr &type ){
+DUContext *Helpers::contextForType( const TopDUContext &top, const AbstractType::Ptr &type ){
 	const ClassDeclaration * const classDecl = classDeclFor( top, type );
-	if( classDecl ){
-		return DUChainPointer<const DUContext>( classDecl->internalContext() );
-		
-	}else{
-		return DUChainPointer<const DUContext>();
-	}
+	return classDecl ? classDecl->internalContext() : nullptr;
 }
 
-ClassDeclaration *Helpers::thisClassDeclFor( DUChainPointer<const DUContext> context ){
-	DUChainPointer<const DUContext> findContext( context );
+ClassDeclaration *Helpers::thisClassDeclFor( const DUContext &context ){
+	const DUContext *findContext = &context;
 	while( findContext ){
-		ClassDeclaration * const decl = classDeclFor( findContext );
+		ClassDeclaration * const decl = classDeclFor( *findContext );
 		if( decl ){
 			return decl;
 		}
 		findContext = findContext->parentContext();
 	}
-	
 	return nullptr;
 }
 
-ClassDeclaration *Helpers::superClassDeclFor( DUChainPointer<const DUContext> context ){
+ClassDeclaration *Helpers::superClassDeclFor( const DUContext &context ){
 	ClassDeclaration * const decl = thisClassDeclFor( context );
-	if( ! decl ){
+	if( ! decl || ! context.parentContext() ){
 		return nullptr;
 	}
 	
-	context = context->parentContext();
-	if( ! context ){
+	const TopDUContext * const topContext = context.topContext();
+	const ClassDeclaration * const classDecl = static_cast<const ClassDeclaration*>( decl );
+	if( ! topContext || ! classDecl ){
 		return nullptr;
 	}
 	
-	return superClassOf( context->topContext(), static_cast<ClassDeclaration*>( decl ) );
+	return superClassOf( *topContext, *classDecl );
 }
 
-ClassDeclaration *Helpers::classDeclFor( DUChainPointer<const DUContext> context ){
-	if( ! context ){
-		return nullptr;
-	}
-	
-	Declaration * const declaration = context->owner();
+ClassDeclaration *Helpers::classDeclFor( const DUContext &context ){
+	Declaration * const declaration = context.owner();
 	if( ! declaration ){
 		return nullptr;
 	}
-	
 	return dynamic_cast<ClassDeclaration*>( declaration );
 }
 
-ClassDeclaration *Helpers::classDeclFor( const TopDUContext *top, const AbstractType::Ptr &type ){
-	if( ! type ){
-		return nullptr;
-	}
-	
+ClassDeclaration *Helpers::classDeclFor( const DUContext *context ){
+	return context ? classDeclFor( *context ) : nullptr;
+}
+
+ClassDeclaration *Helpers::classDeclFor( const TopDUContext &top, const AbstractType::Ptr &type ){
 	StructureType::Ptr structType = type.cast<StructureType>();
 	if( ! structType ){
 		return nullptr;
 	}
 	
-	Declaration * const declType = structType->declaration( top );
+	Declaration * const declType = structType->declaration( &top );
 	if( ! declType ){
 		return nullptr;
 	}
@@ -320,28 +118,23 @@ ClassDeclaration *Helpers::classDeclFor( const TopDUContext *top, const Abstract
 	return static_cast<ClassDeclaration*>( declType );
 }
 
-ClassDeclaration *Helpers::superClassOf( const TopDUContext *top, const ClassDeclaration *declaration ){
-	if( ! declaration ){
+ClassDeclaration *Helpers::superClassOf( const TopDUContext &top,
+const ClassDeclaration &declaration ){
+	if( declaration.baseClassesSize() == 0 ){
 		return nullptr;
 	}
 	
-	if( declaration->baseClassesSize() == 0 ){
-		return nullptr;
-	}
-	
-	return classDeclFor( top, declaration->baseClasses()[ 0 ].baseClass.abstractType() );
+	return classDeclFor( top, declaration.baseClasses()[ 0 ].baseClass.abstractType() );
 }
 
-QVector<ClassDeclaration*> Helpers::implementsOf( const TopDUContext *top, const ClassDeclaration *declaration ){
+QVector<ClassDeclaration*> Helpers::implementsOf( const TopDUContext &top, const
+ClassDeclaration &declaration ){
 	QVector<ClassDeclaration*> implements;
-	if( ! declaration ){
-		return implements;
-	}
-	
 	uint i;
-	for( i=1; i<declaration->baseClassesSize(); i++ ){
+	
+	for( i=1; i<declaration.baseClassesSize(); i++ ){
 		ClassDeclaration * const implementDecl = classDeclFor( top,
-			declaration->baseClasses()[ i ].baseClass.abstractType() );
+			declaration.baseClasses()[ i ].baseClass.abstractType() );
 		if( implementDecl ){
 			implements.append( implementDecl );
 		}
@@ -350,16 +143,14 @@ QVector<ClassDeclaration*> Helpers::implementsOf( const TopDUContext *top, const
 	return implements;
 }
 
-QVector<ClassDeclaration*> Helpers::baseClassesOf( const TopDUContext *top, const ClassDeclaration *declaration ){
+QVector<ClassDeclaration*> Helpers::baseClassesOf( const TopDUContext &top,
+const ClassDeclaration &declaration ){
 	QVector<ClassDeclaration*> baseClasses;
-	if( ! declaration ){
-		return baseClasses;
-	}
-	
 	uint i;
-	for( i=0; i<declaration->baseClassesSize(); i++ ){
+	
+	for( i=0; i<declaration.baseClassesSize(); i++ ){
 		ClassDeclaration * const baseClassDecl = classDeclFor( top,
-			declaration->baseClasses()[ i ].baseClass.abstractType() );
+			declaration.baseClasses()[ i ].baseClass.abstractType() );
 		if( baseClassDecl ){
 			baseClasses.append( baseClassDecl );
 		}
@@ -368,20 +159,34 @@ QVector<ClassDeclaration*> Helpers::baseClassesOf( const TopDUContext *top, cons
 	return baseClasses;
 }
 
-bool Helpers::equals( const TopDUContext *top, const AbstractType::Ptr &type1,
-const AbstractType::Ptr &type2 ){
-	Q_UNUSED( top );
-	return type1 && type2 && type1->equals( type2.operator->() );
+bool Helpers::equals( const AbstractType::Ptr &type1, const AbstractType::Ptr &type2 ){
+	return type1 && type2 && type1->equals( type2.data() );
 }
 
-bool Helpers::castable( const TopDUContext *top, const AbstractType::Ptr &type,
+bool Helpers::equalsInternal( const AbstractType::Ptr &type, const QualifiedIdentifier &internal ){
+	if( ! type ){
+		return false;
+	}
+	
+	const StructureType::Ptr structType( TypePtr<StructureType>::dynamicCast( type ) );
+	if( ! structType ){
+		return false;
+	}
+	
+	return structType->qualifiedIdentifier() == internal;
+}
+
+bool Helpers::castable( const TopDUContext &top, const AbstractType::Ptr &type,
 const AbstractType::Ptr &targetType ){
-	if( equals( top, type, targetType ) ){
+	if( ! type || ! targetType ){
+		return false;
+	}
+	if( type->equals( targetType.data() ) ){
 		return true;
 	}
 	
 	// if type is null-type cast is always possible
-	if( equals( top, type, getTypeNull() ) ){
+	if( type->equals( pTypeNull.data() ) ){
 		return true;
 	}
 	
@@ -391,14 +196,14 @@ const AbstractType::Ptr &targetType ){
 		return false;
 	}
 	
-	ClassDeclaration * const superClassDecl = superClassOf( top, classDecl );
+	ClassDeclaration * const superClassDecl = superClassOf( top, *classDecl );
 	if( superClassDecl ){
 		if( castable( top, superClassDecl->abstractType(), targetType ) ){
 			return true;
 		}
 	}
 	
-	const QVector<ClassDeclaration*> implements( implementsOf( top, classDecl ) );
+	const QVector<ClassDeclaration*> implements( implementsOf( top, *classDecl ) );
 	foreach( ClassDeclaration* implement, implements ){
 		if( castable( top, implement->abstractType(), targetType ) ){
 			return true;
@@ -406,27 +211,32 @@ const AbstractType::Ptr &targetType ){
 	}
 	
 	// check for primitive auto-casting
-	if( equals( top, type, getTypeByte() ) ){
-		return equals( top, targetType, getTypeInt() )
-			|| equals( top, targetType, getTypeFloat() );
+	const StructureType::Ptr structType( TypePtr<StructureType>::dynamicCast( type ) );
+	const StructureType::Ptr structTargetType( TypePtr<StructureType>::dynamicCast( targetType ) );
+	if( ! structType || ! structTargetType ){
+		return false;
+	}
+	
+	if( structType->qualifiedIdentifier() == pTypeByte ){
+		return structTargetType->qualifiedIdentifier() == pTypeInt
+			|| structTargetType->qualifiedIdentifier() == pTypeFloat;
 		
-	}else if( equals( top, type, getTypeInt() ) ){
+	}else if( structType->qualifiedIdentifier() == pTypeInt ){
 		// to byte is possible if constant value
-		return equals( top, targetType, getTypeByte() )
-			|| equals( top, targetType, getTypeFloat() );
+		return structTargetType->qualifiedIdentifier() == pTypeByte
+			|| structTargetType->qualifiedIdentifier() == pTypeFloat;
 	}
 	
 	return false;
 }
 
-bool Helpers::sameSignature( const TopDUContext *top, const FunctionType::Ptr &func1,
-const FunctionType::Ptr &func2 ){
-	return sameSignatureAnyReturnType( top, func1, func2 )
-		&& equals( top, func1->returnType(), func2->returnType() );
+bool Helpers::sameSignature( const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 ){
+	return sameSignatureAnyReturnType( func1, func2 )
+		&& equals( func1->returnType(), func2->returnType() );
 }
 
-bool Helpers::sameSignatureAnyReturnType( const TopDUContext *top,
-const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 ){
+bool Helpers::sameSignatureAnyReturnType( const FunctionType::Ptr &func1,
+const FunctionType::Ptr &func2 ){
 	if( ! func1 || ! func2 ){
 		return false;
 	}
@@ -437,7 +247,7 @@ const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 ){
 	
 	int i;
 	for( i=0; i<func1->arguments().size(); i++ ){
-		if( ! equals( top, func1->arguments().at( i ), func2->arguments().at( i ) ) ){
+		if( ! equals( func1->arguments().at( i ), func2->arguments().at( i ) ) ){
 			return false;
 		}
 	}
@@ -445,7 +255,7 @@ const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 ){
 	return true;
 }
 
-bool Helpers::overrides( const TopDUContext *top, const ClassFunctionDeclaration *func1,
+bool Helpers::overrides( const TopDUContext &top, const ClassFunctionDeclaration *func1,
 const ClassFunctionDeclaration *func2 ){
 	return func1 && func1->context() && func1->context()->owner()
 		&& func2 && func2->context() && func2->context()->owner()
@@ -453,68 +263,54 @@ const ClassFunctionDeclaration *func2 ){
 			func2->context()->owner()->abstractType() );
 }
 
-static const QVector<DUChainPointer<const DUContext>> vEmptyPinned;
 
 
-
-Declaration *Helpers::declarationForName( const QString& name,
-const CursorInRevision &location, DUChainPointer<const DUContext> context ){
-	return declarationForName( name, location, context, vEmptyPinned );
+IndexedString Helpers::getDocumentationFileObject(){
+	if( documentationFileObject.isEmpty() ){
+		documentationFileObject = IndexedString(
+			QStandardPaths::locate( QStandardPaths::GenericDataLocation,
+				QString( "kdevdragonscriptsupport/dslangdoc/Object.ds" ) ) );
+	}
+	return documentationFileObject;
 }
 
-Declaration *Helpers::declarationForName( const QString& name,
-const CursorInRevision &location, DUChainPointer<const DUContext> context,
-const QVector<DUChainPointer<const DUContext>> &pinned ){
-	const Identifier identifier( name );
+Declaration *Helpers::getInternalTypeDeclaration( const TopDUContext &top,
+const QualifiedIdentifier &identifier ){
+	const QList<Declaration*> declarations( top.findDeclarations( identifier ) );
+	return ! declarations.isEmpty() ? declarations.first() : nullptr;
+}
+
+
+
+Declaration *Helpers::declarationForName( const IndexedIdentifier &identifier,
+const CursorInRevision &location, const DUContext &context ){
 	QList<Declaration*> declarations;
 	
-	// find declaration in local context
-	declarations = context->findLocalDeclarations( identifier, location /*,
-		nullptr, AbstractType::Ptr(), DUContext::DontResolveAliases */ );
+	// find declaration in local context up to location
+	declarations = context.findLocalDeclarations( identifier, location );
 	if( ! declarations.isEmpty() ){
 		return declarations.last();
 	}
 	
-	// find declaration in this context, base class and up the parent chain
-	declarations = context->findDeclarations( identifier );
+	// find declaration in this context, base class and up the parent chain. this finds
+	// also definitions in the local scope beyond the location. both checks are required
+	// with the location based local version first to avoid a later definition hiding a
+	// local one instead of vice versa
+	declarations = context.findDeclarations( identifier );
 	if( ! declarations.isEmpty() ){
 		return declarations.last();
 	}
 	
-	Declaration * const foundDeclaration = declarationForNameInBase( name, context );
-	if( foundDeclaration ){
-		return foundDeclaration;
-	}
-	
-	// find declaration in pinned contexts
-	for( const DUChainPointer<const DUContext> &pinnedContext : pinned ){
-		declarations = pinnedContext->findDeclarations( identifier );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
-		}
-	}
-	
-	// find declaration in basic language documentation
-	const QVector<ReferencedTopDUContext> basicContexts( ImportPackageLanguage::self()->getContexts() );
-	foreach( const ReferencedTopDUContext &basicContext, basicContexts ){
-		declarations = basicContext->findDeclarations( identifier );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
-		}
-	}
-	
-	return nullptr;
+	return declarationForNameInBase( identifier, context );
 }
 
-Declaration *Helpers::declarationForNameInBase( const QString& name,
-DUChainPointer<const DUContext> context ){
-	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context->owner() );
+Declaration *Helpers::declarationForNameInBase( const IndexedIdentifier &identifier, const DUContext &context ){
+	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
 	if( ! classDecl || classDecl->baseClassesSize() == 0 ){
 		return nullptr;
 	}
 	
-	TopDUContext * const topContext = context->topContext();
-	const Identifier identifier( name );
+	TopDUContext * const topContext = context.topContext();
 	uint i;
 	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
@@ -534,8 +330,7 @@ DUChainPointer<const DUContext> context ){
 			return declarations.last();
 		}
 		
-		Declaration * const foundDeclaration = declarationForNameInBase( name,
-			DUChainPointer<const DUContext>( baseContext ) );
+		Declaration * const foundDeclaration = declarationForNameInBase( identifier, *baseContext );
 		if( foundDeclaration ){
 			return foundDeclaration;
 		}
@@ -546,70 +341,40 @@ DUChainPointer<const DUContext> context ){
 
 
 
-QVector<Declaration*> Helpers::declarationsForName( const QString& name,
-const CursorInRevision &location, DUChainPointer<const DUContext> context ){
-	return declarationsForName( name, location, context, vEmptyPinned );
-}
-
-QVector<Declaration*> Helpers::declarationsForName( const QString& name,
-const CursorInRevision &location, DUChainPointer<const DUContext> context,
-const QVector<DUChainPointer<const DUContext>> &pinned ){
+QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
+const CursorInRevision &location, const DUContext &context ){
 	QVector<Declaration*> foundDeclarations;
-	const Identifier identifier( name );
 	QList<Declaration*> declarations;
 	
 	// find declaration in local context
-	declarations = context->findLocalDeclarations( identifier, location /*,
-		nullptr, AbstractType::Ptr(), DUContext::DontResolveAliases */ );
+	declarations = context.findLocalDeclarations( identifier, location );
 	foreach( Declaration *declaration, declarations ){
 		foundDeclarations.append( declaration );
 	}
 	
 	// find declaration in this context, base class and up the parent chain
-	declarations = context->findDeclarations( identifier );
+	declarations = context.findDeclarations( identifier );
 	foreach( Declaration *declaration, declarations ){
 		if( ! foundDeclarations.contains( declaration ) ){
 			foundDeclarations.append( declaration );
 		}
 	}
 	
-	foundDeclarations.append( declarationsForNameInBase( name, context ) );
-	
-	// find declaration in pinned contexts
-	for( const DUChainPointer<const DUContext> &pinnedContext : pinned ){
-		declarations = pinnedContext->findDeclarations( identifier );
-		foreach( Declaration* declaration, declarations ){
-			foundDeclarations.append( declaration );
-		}
-	}
-	
-	// find declaration in imported contexts
-	// TODO we need to find this somehow.
-	//QVector<ReferencedTopDUContext> importedContexts( getDocumentationFileContexts() );
-	
-	// find declaration in basic language documentation
-	QVector<ReferencedTopDUContext> basicContexts( ImportPackageLanguage::self()->getContexts() );
-	foreach( const ReferencedTopDUContext &basicContext, basicContexts ){
-		declarations = basicContext->findDeclarations( identifier );
-		foreach( Declaration *declaration, declarations ){
-			foundDeclarations.append( declaration );
-		}
-	}
+	foundDeclarations.append( declarationsForNameInBase( identifier, context ) );
 	
 	return foundDeclarations;
 }
 
-QVector<Declaration*> Helpers::declarationsForNameInBase( const QString& name,
-DUChainPointer<const DUContext> context ){
+QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
+const DUContext &context ){
 	QVector<Declaration*> foundDeclarations;
 	
-	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context->owner() );
+	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
 	if( ! classDecl || classDecl->baseClassesSize() == 0 ){
 		return foundDeclarations;
 	}
 	
-	TopDUContext * const topContext = context->topContext();
-	const Identifier identifier( name );
+	TopDUContext * const topContext = context.topContext();
 	uint i;
 	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
@@ -631,19 +396,17 @@ DUChainPointer<const DUContext> context ){
 			}
 		}
 		
-		foundDeclarations.append( declarationsForNameInBase( name,
-			DUChainPointer<const DUContext>( baseContext ) ) );
+		foundDeclarations.append( declarationsForNameInBase( identifier, *baseContext ) );
 	}
 	
 	return foundDeclarations;
 }
 
-QVector<Declaration*> Helpers::constructorsInClass( DUChainPointer<const DUContext> context ){
-	QVector<Declaration*> foundDeclarations;
-	QList<Declaration*> declarations;
-	
+QVector<Declaration*> Helpers::constructorsInClass( const DUContext &context ){
 	// find declaration in this context without base class or parent chain
-	declarations = context->findDeclarations( nameConstructor );
+	QList<Declaration*> declarations( context.findDeclarations( nameConstructor ) );
+	QVector<Declaration*> foundDeclarations;
+	
 	foreach( Declaration *declaration, declarations ){
 		if( ! foundDeclarations.contains( declaration ) ){
 			foundDeclarations.append( declaration );
@@ -653,9 +416,7 @@ QVector<Declaration*> Helpers::constructorsInClass( DUChainPointer<const DUConte
 	return foundDeclarations;
 }
 
-
-
-ClassFunctionDeclaration *Helpers::bestMatchingFunction( const TopDUContext *top,
+ClassFunctionDeclaration *Helpers::bestMatchingFunction(
 const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
 	ClassFunctionDeclaration *bestMatchingDecl = nullptr;
 	const int argCount = signature.size();
@@ -673,7 +434,7 @@ const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declar
 		}
 		
 		for( i=0; i<argCount; i++ ){
-			if( ! equals( top, signature.at( i ), funcType->arguments().at( i ) ) ){
+			if( ! equals( signature.at( i ), funcType->arguments().at( i ) ) ){
 				break;
 			}
 		}
@@ -686,7 +447,7 @@ const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declar
 	return bestMatchingDecl;
 }
 
-QVector<ClassFunctionDeclaration*> Helpers::autoCastableFunctions( const TopDUContext *top,
+QVector<ClassFunctionDeclaration*> Helpers::autoCastableFunctions( const TopDUContext &top,
 const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
 	QVector<ClassFunctionDeclaration*> possibleFunctions;
 	const int argCount = signature.size();
@@ -719,14 +480,14 @@ const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declar
 		foreach( const ClassFunctionDeclaration *checkFuncDecl, possibleFunctions ){
 			// if this is a constructor call do not check the return type
 			if( nameConstructor == declaration->identifier() ){
-				if( sameSignatureAnyReturnType( top, funcType, checkFuncDecl->type<FunctionType>() )
+				if( sameSignatureAnyReturnType( funcType, checkFuncDecl->type<FunctionType>() )
 				&& overrides( top, checkFuncDecl, funcDecl ) ){
 					ignoreFunction = true;
 					break;
 				}
 				
 			}else{
-				if( sameSignature( top, funcType, checkFuncDecl->type<FunctionType>() )
+				if( sameSignature( funcType, checkFuncDecl->type<FunctionType>() )
 				&& overrides( top, checkFuncDecl, funcDecl ) ){
 					ignoreFunction = true;
 					break;
@@ -742,29 +503,6 @@ const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declar
 	}
 	
 	return possibleFunctions;
-}
-
-IndexedString Helpers::getDocumentationFileObject(){
-	if( documentationFileObject.isEmpty() ){
-		documentationFileObject = IndexedString(
-			QStandardPaths::locate( QStandardPaths::GenericDataLocation,
-				QString( "kdevdragonscriptsupport/dslangdoc/Object.ds" ) ) );
-	}
-	return documentationFileObject;
-}
-
-Declaration *Helpers::getInternalTypeDeclaration( const QString &name ){
-	QVector<ReferencedTopDUContext> contexts( ImportPackageLanguage::self()->getContexts() );
-	const Identifier identifier( name );
-	
-	foreach( const ReferencedTopDUContext &context, contexts ){
-		const QList<Declaration*> declarations( context->findDeclarations( identifier ) );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
-		}
-	}
-	
-	return nullptr;
 }
 
 }

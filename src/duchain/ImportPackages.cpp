@@ -41,18 +41,18 @@ void ImportPackages::addPackage( const ImportPackage::Ref &package ){
 	pPackages[ package->name() ] = package;
 }
 
-void ImportPackages::dropContextsNamed( const QString &name ){
+void ImportPackages::reparseNamed( const QString &name ){
 	QMutexLocker lock( &pMutex );
 	QMap<QString, ImportPackage::Ref>::iterator iter( pPackages.find( name ) );
 	if( iter != pPackages.end() ){
-		(*iter)->dropContexts();
+		(*iter)->reparse();
 	}
 }
 
-void ImportPackages::dropAllContexts(){
+void ImportPackages::reparseAll(){
 	QMutexLocker lock( &pMutex );
-	foreach( const ImportPackage::Ref &each, pPackages ){
-		each->dropContexts();
+	foreach( const ImportPackage::Ref &package, pPackages ){
+		package->reparse();
 	}
 }
 

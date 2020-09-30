@@ -71,7 +71,7 @@ void DSSessionSettings::detectDragengineUse(){
 	if( pPathDragengineUse != oldPath ){
 		ICore::self()->activeSession()->config()->group( "dragonscriptsupport" )
 			.writeEntry( "pathDragengineUse", pathDragengineUse() );
-		ImportPackageDragengine::self()->dropContexts();
+		ImportPackageDragengine::self()->reparse();
 	}
 }
 

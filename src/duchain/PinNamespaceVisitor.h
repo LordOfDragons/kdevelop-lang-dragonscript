@@ -22,19 +22,12 @@
 #include "EditorIntegrator.h"
 #include "Helpers.h"
 
-using KDevelop::Identifier;
-using KDevelop::DUContext;
-using KDevelop::DUChainPointer;
-using KDevelop::FunctionDeclaration;
-using KDevelop::TypePtr;
-using KDevelop::QualifiedIdentifier;
-using KDevelop::DUContextPointer;
+
+using namespace KDevelop;
 
 namespace DragonScript {
 
 class EditorIntegrator;
-
-typedef DUChainPointer<FunctionDeclaration> FunctionDeclarationPointer;
 
 /**
  * \brief Pin namespace visitor.
@@ -46,7 +39,7 @@ private:
 	const EditorIntegrator &pEditorIntegrator;
 	const DUContext *pContext;
 	
-	QVector<DUChainPointer<const DUContext>> pNamespaces;
+	QVector<DUContext*> pNamespaces;
 	
 	
 	
@@ -55,7 +48,7 @@ public:
 	
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;
 	
-	const QVector<DUChainPointer<const DUContext>> &namespaces() const{
+	const QVector<DUContext*> &namespaces() const{
 		return pNamespaces;
 	}
 	

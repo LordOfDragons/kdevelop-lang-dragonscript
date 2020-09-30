@@ -63,8 +63,9 @@ const QVector<IdentifierAst*> nodes, const QVector<QString> &names, int index ){
 	
 // 	QList<Declaration*> declarations( searchContext->findLocalDeclarations(
 // 		names.at( index ), CursorInRevision::invalid() ) );
-	QVector<Declaration*> declarations( Helpers::declarationsForName( names.at( index ),
-		CursorInRevision::invalid(), DUChainPointer<const DUContext>( searchContext ) ) );
+	const IndexedIdentifier identifier( Identifier( names.at( index ) ) );
+	QVector<Declaration*> declarations( Helpers::declarationsForName( identifier,
+		CursorInRevision::invalid(), *searchContext ) );
 	
 // 	qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index ) << "found" << declarations;
 	if( declarations.isEmpty() ){
@@ -80,7 +81,7 @@ const QVector<IdentifierAst*> nodes, const QVector<QString> &names, int index ){
 		}
 		
 		if( isLast ){
-			pNamespaces.append( DUChainPointer<const DUContext>( context ) );
+			pNamespaces.append( context );
 			
 		}else{
 			findNamespaceIn( context, nodes, names, index + 1 );

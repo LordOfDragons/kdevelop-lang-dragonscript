@@ -35,34 +35,26 @@
 #include "ExpressionVisitor.h"
 #include "ImportPackageLanguage.h"
 
-using KDevelop::AliasDeclaration;
-using KDevelop::BackgroundParser;
-using KDevelop::ClassDeclaration;
-using KDevelop::DUChain;
-using KDevelop::DUChainReadLocker;
-using KDevelop::ICore;
-using KDevelop::IntegralType;
-using KDevelop::ParseJob;
-using KDevelop::StructureType;
-using KDevelop::FunctionType;
+
+using namespace KDevelop;
 
 namespace DragonScript {
 
 IndexedString Helpers::documentationFileObject;
 IndexedString Helpers::documentationFileEnumeration;
 
-KDevelop::AbstractType::Ptr Helpers::pTypeVoid;
-KDevelop::AbstractType::Ptr Helpers::pTypeNull;
-KDevelop::AbstractType::Ptr Helpers::pTypeInvalid;
+AbstractType::Ptr Helpers::pTypeVoid;
+AbstractType::Ptr Helpers::pTypeNull;
+AbstractType::Ptr Helpers::pTypeInvalid;
 
-KDevelop::AbstractType::Ptr Helpers::pTypeByte;
-KDevelop::AbstractType::Ptr Helpers::pTypeBool;
-KDevelop::AbstractType::Ptr Helpers::pTypeInt;
-KDevelop::AbstractType::Ptr Helpers::pTypeFloat;
-KDevelop::AbstractType::Ptr Helpers::pTypeString;
-KDevelop::AbstractType::Ptr Helpers::pTypeObject;
-KDevelop::AbstractType::Ptr Helpers::pTypeBlock;
-KDevelop::AbstractType::Ptr Helpers::pTypeEnumeration;
+AbstractType::Ptr Helpers::pTypeByte;
+AbstractType::Ptr Helpers::pTypeBool;
+AbstractType::Ptr Helpers::pTypeInt;
+AbstractType::Ptr Helpers::pTypeFloat;
+AbstractType::Ptr Helpers::pTypeString;
+AbstractType::Ptr Helpers::pTypeObject;
+AbstractType::Ptr Helpers::pTypeBlock;
+AbstractType::Ptr Helpers::pTypeEnumeration;
 
 DeclarationPointer Helpers::pTypeDeclByte;
 DeclarationPointer Helpers::pTypeDeclBool;
@@ -77,28 +69,28 @@ static const Identifier nameConstructor( "new" );
 
 
 
-KDevelop::AbstractType::Ptr Helpers::getTypeVoid(){
+AbstractType::Ptr Helpers::getTypeVoid(){
 	if( ! pTypeVoid ){
 		pTypeVoid = new IntegralType( IntegralType::TypeVoid );
 	}
 	return pTypeVoid;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeNull(){
+AbstractType::Ptr Helpers::getTypeNull(){
 	if( ! pTypeNull ){
 		pTypeNull = new IntegralType( IntegralType::TypeNull );
 	}
 	return pTypeNull;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeInvalid(){
+AbstractType::Ptr Helpers::getTypeInvalid(){
 	if( ! pTypeInvalid ){
 		pTypeInvalid = new IntegralType( IntegralType::TypeMixed );
 	}
 	return pTypeInvalid;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeByte(){
+AbstractType::Ptr Helpers::getTypeByte(){
 	if( ! pTypeDeclByte ){
 		pTypeDeclByte = getInternalTypeDeclaration( "byte" );
 		if( pTypeDeclByte ){
@@ -113,7 +105,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeByte(){
 	return pTypeByte;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeBool(){
+AbstractType::Ptr Helpers::getTypeBool(){
 	if( ! pTypeDeclBool ){
 		pTypeDeclBool = getInternalTypeDeclaration( "bool" );
 		if( pTypeDeclBool ){
@@ -128,7 +120,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeBool(){
 	return pTypeBool;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeInt(){
+AbstractType::Ptr Helpers::getTypeInt(){
 	if( ! pTypeDeclInt ){
 		pTypeDeclInt = getInternalTypeDeclaration( "int" );
 		if( pTypeDeclInt ){
@@ -143,7 +135,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeInt(){
 	return pTypeInt;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeFloat(){
+AbstractType::Ptr Helpers::getTypeFloat(){
 	if( ! pTypeDeclFloat ){
 		pTypeDeclFloat = getInternalTypeDeclaration( "float" );
 		if( pTypeDeclFloat ){
@@ -158,7 +150,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeFloat(){
 	return pTypeFloat;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeString(){
+AbstractType::Ptr Helpers::getTypeString(){
 	if( ! pTypeDeclString ){
 		pTypeDeclString = getInternalTypeDeclaration( "String" );
 		if( pTypeDeclString ){
@@ -173,7 +165,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeString(){
 	return pTypeString;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeObject(){
+AbstractType::Ptr Helpers::getTypeObject(){
 	if( ! pTypeDeclObject ){
 		pTypeDeclObject = getInternalTypeDeclaration( "Object" );
 		if( pTypeDeclObject ){
@@ -188,7 +180,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeObject(){
 	return pTypeObject;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeBlock(){
+AbstractType::Ptr Helpers::getTypeBlock(){
 	if( ! pTypeDeclBlock ){
 		pTypeDeclBlock = getInternalTypeDeclaration( "Block" );
 		if( pTypeDeclBlock ){
@@ -203,7 +195,7 @@ KDevelop::AbstractType::Ptr Helpers::getTypeBlock(){
 	return pTypeBlock;
 }
 
-KDevelop::AbstractType::Ptr Helpers::getTypeEnumeration(){
+AbstractType::Ptr Helpers::getTypeEnumeration(){
 	if( ! pTypeDeclEnumeration ){
 		pTypeDeclEnumeration = getInternalTypeDeclaration( "Enumeration" );
 		if( pTypeDeclEnumeration ){
@@ -218,50 +210,49 @@ KDevelop::AbstractType::Ptr Helpers::getTypeEnumeration(){
 	return pTypeEnumeration;
 }
 
-void Helpers::getTypeByte( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeByte( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeByte();
 	declaration = pTypeDeclByte;
 }
 
-void Helpers::getTypeBool( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeBool( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeBool();
 	declaration = pTypeDeclBool;
 }
 
-void Helpers::getTypeInt( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeInt( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeInt();
 	declaration = pTypeDeclInt;
 }
 
-void Helpers::getTypeFloat( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeFloat( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeFloat();
 	declaration = pTypeDeclFloat;
 }
 
-void Helpers::getTypeString( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeString( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeString();
 	declaration = pTypeDeclString;
 }
 
-void Helpers::getTypeObject( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeObject( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeObject();
 	declaration = pTypeDeclObject;
 }
 
-void Helpers::getTypeBlock( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeBlock( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeBlock();
 	declaration = pTypeDeclBlock;
 }
 
-void Helpers::getTypeEnumeration( DeclarationPointer &declaration, KDevelop::AbstractType::Ptr &type ){
+void Helpers::getTypeEnumeration( DeclarationPointer &declaration, AbstractType::Ptr &type ){
 	type = getTypeEnumeration();
 	declaration = pTypeDeclEnumeration;
 }
 
 
 
-DUChainPointer<const DUContext> Helpers::contextForType( const TopDUContext *top,
-const KDevelop::AbstractType::Ptr &type ){
+DUChainPointer<const DUContext> Helpers::contextForType( const TopDUContext *top, const AbstractType::Ptr &type ){
 	const ClassDeclaration * const classDecl = classDeclFor( top, type );
 	if( classDecl ){
 		return DUChainPointer<const DUContext>( classDecl->internalContext() );
@@ -311,7 +302,7 @@ ClassDeclaration *Helpers::classDeclFor( DUChainPointer<const DUContext> context
 	return dynamic_cast<ClassDeclaration*>( declaration );
 }
 
-ClassDeclaration *Helpers::classDeclFor( const TopDUContext *top, const KDevelop::AbstractType::Ptr &type ){
+ClassDeclaration *Helpers::classDeclFor( const TopDUContext *top, const AbstractType::Ptr &type ){
 	if( ! type ){
 		return nullptr;
 	}
@@ -377,14 +368,14 @@ QVector<ClassDeclaration*> Helpers::baseClassesOf( const TopDUContext *top, cons
 	return baseClasses;
 }
 
-bool Helpers::equals( const TopDUContext *top, const KDevelop::AbstractType::Ptr &type1,
-const KDevelop::AbstractType::Ptr &type2 ){
+bool Helpers::equals( const TopDUContext *top, const AbstractType::Ptr &type1,
+const AbstractType::Ptr &type2 ){
 	Q_UNUSED( top );
 	return type1 && type2 && type1->equals( type2.operator->() );
 }
 
-bool Helpers::castable( const TopDUContext *top, const KDevelop::AbstractType::Ptr &type,
-const KDevelop::AbstractType::Ptr &targetType ){
+bool Helpers::castable( const TopDUContext *top, const AbstractType::Ptr &type,
+const AbstractType::Ptr &targetType ){
 	if( equals( top, type, targetType ) ){
 		return true;
 	}
@@ -428,14 +419,14 @@ const KDevelop::AbstractType::Ptr &targetType ){
 	return false;
 }
 
-bool Helpers::sameSignature( const TopDUContext *top, const KDevelop::FunctionType::Ptr &func1,
-const KDevelop::FunctionType::Ptr &func2 ){
+bool Helpers::sameSignature( const TopDUContext *top, const FunctionType::Ptr &func1,
+const FunctionType::Ptr &func2 ){
 	return sameSignatureAnyReturnType( top, func1, func2 )
 		&& equals( top, func1->returnType(), func2->returnType() );
 }
 
 bool Helpers::sameSignatureAnyReturnType( const TopDUContext *top,
-const KDevelop::FunctionType::Ptr &func1, const KDevelop::FunctionType::Ptr &func2 ){
+const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 ){
 	if( ! func1 || ! func2 ){
 		return false;
 	}
@@ -462,49 +453,24 @@ const ClassFunctionDeclaration *func2 ){
 			func2->context()->owner()->abstractType() );
 }
 
-
-
-/*
-IndexedDeclaration Helpers::declarationUnderCursor( bool allowUse ){
-	KDevelop::IDocument * const doc = ICore::self()->documentController()->activeDocument();
-	const auto view = static_cast<KDevelop::PartController*>( ICore::self()->partController() )->activeView();
-	if( doc && doc->textDocument() && view ){
-		DUChainReadLocker lock;
-		const auto cursor = view->cursorPosition();
-		if( allowUse ){
-			return IndexedDeclaration( KDevelop::DUChainUtils::itemUnderCursor( doc->url(), cursor ).declaration );
-			
-		}else{
-			return KDevelop::DUChainUtils::declarationInLine( cursor, KDevelop::DUChainUtils::standardContextForUrl( doc->url() ) );
-		}
-	}
-
-	return KDevelop::IndexedDeclaration();
-}
-*/
-
-KDevelop::AbstractType::Ptr Helpers::resolveAliasType( const KDevelop::AbstractType::Ptr eventualAlias ){
-	return TypeUtils::resolveAliasType( eventualAlias );
-}
-
 static const QVector<DUChainPointer<const DUContext>> vEmptyPinned;
 
 
 
 Declaration *Helpers::declarationForName( const QString& name,
-const CursorInRevision &location, KDevelop::DUChainPointer<const DUContext> context ){
+const CursorInRevision &location, DUChainPointer<const DUContext> context ){
 	return declarationForName( name, location, context, vEmptyPinned );
 }
 
 Declaration *Helpers::declarationForName( const QString& name,
-const CursorInRevision &location, KDevelop::DUChainPointer<const DUContext> context,
+const CursorInRevision &location, DUChainPointer<const DUContext> context,
 const QVector<DUChainPointer<const DUContext>> &pinned ){
 	const Identifier identifier( name );
 	QList<Declaration*> declarations;
 	
 	// find declaration in local context
 	declarations = context->findLocalDeclarations( identifier, location /*,
-		nullptr, KDevelop::AbstractType::Ptr(), DUContext::DontResolveAliases */ );
+		nullptr, AbstractType::Ptr(), DUContext::DontResolveAliases */ );
 	if( ! declarations.isEmpty() ){
 		return declarations.last();
 	}
@@ -541,7 +507,7 @@ const QVector<DUChainPointer<const DUContext>> &pinned ){
 }
 
 Declaration *Helpers::declarationForNameInBase( const QString& name,
-KDevelop::DUChainPointer<const DUContext> context ){
+DUChainPointer<const DUContext> context ){
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context->owner() );
 	if( ! classDecl || classDecl->baseClassesSize() == 0 ){
 		return nullptr;
@@ -581,12 +547,12 @@ KDevelop::DUChainPointer<const DUContext> context ){
 
 
 QVector<Declaration*> Helpers::declarationsForName( const QString& name,
-const CursorInRevision &location, KDevelop::DUChainPointer<const DUContext> context ){
+const CursorInRevision &location, DUChainPointer<const DUContext> context ){
 	return declarationsForName( name, location, context, vEmptyPinned );
 }
 
 QVector<Declaration*> Helpers::declarationsForName( const QString& name,
-const CursorInRevision &location, KDevelop::DUChainPointer<const DUContext> context,
+const CursorInRevision &location, DUChainPointer<const DUContext> context,
 const QVector<DUChainPointer<const DUContext>> &pinned ){
 	QVector<Declaration*> foundDeclarations;
 	const Identifier identifier( name );
@@ -594,7 +560,7 @@ const QVector<DUChainPointer<const DUContext>> &pinned ){
 	
 	// find declaration in local context
 	declarations = context->findLocalDeclarations( identifier, location /*,
-		nullptr, KDevelop::AbstractType::Ptr(), DUContext::DontResolveAliases */ );
+		nullptr, AbstractType::Ptr(), DUContext::DontResolveAliases */ );
 	foreach( Declaration *declaration, declarations ){
 		foundDeclarations.append( declaration );
 	}
@@ -634,7 +600,7 @@ const QVector<DUChainPointer<const DUContext>> &pinned ){
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const QString& name,
-KDevelop::DUChainPointer<const DUContext> context ){
+DUChainPointer<const DUContext> context ){
 	QVector<Declaration*> foundDeclarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context->owner() );
@@ -690,7 +656,7 @@ QVector<Declaration*> Helpers::constructorsInClass( DUChainPointer<const DUConte
 
 
 ClassFunctionDeclaration *Helpers::bestMatchingFunction( const TopDUContext *top,
-const QVector<KDevelop::AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
+const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
 	ClassFunctionDeclaration *bestMatchingDecl = nullptr;
 	const int argCount = signature.size();
 	int i;
@@ -721,7 +687,7 @@ const QVector<KDevelop::AbstractType::Ptr> &signature, const QVector<Declaration
 }
 
 QVector<ClassFunctionDeclaration*> Helpers::autoCastableFunctions( const TopDUContext *top,
-const QVector<KDevelop::AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
+const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations ){
 	QVector<ClassFunctionDeclaration*> possibleFunctions;
 	const int argCount = signature.size();
 	int i;
@@ -778,38 +744,6 @@ const QVector<KDevelop::AbstractType::Ptr> &signature, const QVector<Declaration
 	return possibleFunctions;
 }
 
-
-
-QVector<DUContext*> Helpers::internalContextsForClass( const KDevelop::StructureType::Ptr classType,
-const TopDUContext *context, ContextSearchFlags flags, int depth ){
-	QVector<DUContext*> searchContexts;
-	if( ! classType ){
-		return searchContexts;
-	}
-	if( auto c = classType->internalContext( context ) ){
-		searchContexts << c;
-	}
-	auto decl = Helpers::resolveAliasDeclaration( classType->declaration( context ) );
-	if( auto classDecl = dynamic_cast<ClassDeclaration*>( decl ) ){
-		FOREACH_FUNCTION ( const auto &base, classDecl->baseClasses ){
-			if( flags == PublicOnly && base.access == KDevelop::Declaration::Private ){
-				continue;
-			}
-			auto baseClassType = base.baseClass.type<StructureType>();
-			// recursive call, because the base class will have more base classes eventually
-			if( depth < 10 ){
-				searchContexts.append( Helpers::internalContextsForClass( baseClassType, context, flags, depth + 1 ) );
-			}
-		}
-	}
-	return searchContexts;
-}
-
-Declaration *Helpers::resolveAliasDeclaration( Declaration *decl ){
-	AliasDeclaration * const alias = dynamic_cast<AliasDeclaration*>( decl );
-	return alias ? alias->aliasedDeclaration().data() : decl;
-}
-
 IndexedString Helpers::getDocumentationFileObject(){
 	if( documentationFileObject.isEmpty() ){
 		documentationFileObject = IndexedString(
@@ -817,15 +751,6 @@ IndexedString Helpers::getDocumentationFileObject(){
 				QString( "kdevdragonscriptsupport/dslangdoc/Object.ds" ) ) );
 	}
 	return documentationFileObject;
-}
-
-IndexedString Helpers::getDocumentationFileEnumeration(){
-	if( documentationFileEnumeration.isEmpty() ){
-		documentationFileEnumeration = IndexedString(
-			QStandardPaths::locate( QStandardPaths::GenericDataLocation,
-				QString( "kdevdragonscriptsupport/dslangdoc/Enumeration.ds" ) ) );
-	}
-	return documentationFileEnumeration;
 }
 
 Declaration *Helpers::getInternalTypeDeclaration( const QString &name ){

@@ -21,14 +21,8 @@
 #include "EditorIntegrator.h"
 #include "Helpers.h"
 
-using KDevelop::AliasDeclaration;
-using KDevelop::ClassDeclaration;
-using KDevelop::IntegralType;
-using KDevelop::IndexedType;
-using KDevelop::StructureType;
-using KDevelop::Problem;
-using KDevelop::DocumentRange;
-using KDevelop::DeclarationPointer;
+
+using namespace KDevelop;
 
 namespace DragonScript {
 

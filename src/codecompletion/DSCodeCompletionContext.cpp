@@ -17,20 +17,10 @@
 #include "TokenText.h"
 
 
-using KDevelop::CodeCompletionWorker;
-using KDevelop::CodeCompletionContext;
-using KDevelop::CompletionTreeItemPointer;
-using KDevelop::CursorInRevision;
-using KDevelop::DUContext;
-using KDevelop::DUContextPointer;
-using KDevelop::DUChainReadLocker;
-using KDevelop::Use;
-using KDevelop::StructureType;
+using namespace KDevelop;
 
 using KTextEditor::Range;
 using KTextEditor::View;
-
-
 
 namespace DragonScript {
 

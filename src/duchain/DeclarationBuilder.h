@@ -39,20 +39,19 @@ public:
 		const ParseSession &parseSession, const QVector<ImportPackage::Ref> &deps );
 	~DeclarationBuilder() override;
 	
-	/** \brief Entry function, called by KDevPlatform. */
-// 	ReferencedTopDUContext build( const IndexedString &url, AstNode *node,
-// 		ReferencedTopDUContext updateContext = ReferencedTopDUContext() ) override;
-	
-	/** \brief Close namespace contexts. */
+	/** Close namespace contexts. */
 	void closeNamespaceContexts();
 	
-	/** \brief Pinned namespaces. */
+	/** Pinned namespaces. */
 	inline const QVector<DUChainPointer<const DUContext>> &GetPinned(){ return pPinned; }
 	
-	/** \brief Find all existing declarations for the identifier \p node. */
+	/**
+	 * Find all existing declarations for the identifier \p node.
+	 * \note DUChainReadLocker required.
+	 */
 	QList<Declaration*> existingDeclarationsForNode( IdentifierAst *node );
 	
-	/** \brief Get documentation for node. */
+	/** Get documentation for node. */
 	QString getDocumentationForNode( const AstNode &node ) const;
 	
 	void visitScript( ScriptAst *node ) override;
@@ -84,7 +83,7 @@ public:
 	
 	
 protected:
-	/** \brief Access policy from last modifiers. */
+	/** Access policy from last modifiers. */
 	ClassMemberDeclaration::AccessPolicy accessPolicyFromLastModifiers() const;
 };
 

@@ -1,0 +1,21 @@
+DUChain locking
+---------------
+
+It's difficult to find consistent information in the source code or elsewhere when locking
+of the DUChain is required and what type of locking is required. So far I figured out this:
+
+- When accessing DUContext method of "const" type DUChainReadLocker is required
+
+- When accessing DUContext method of non-"const" type DUChainWriteLocker is required
+
+- Declaration::owner() does not seem to require locking
+
+- DUChainPointer does not seem to require locking (weak pointer)
+
+- DUChainReferencedPointer requires DUChainWriteLocker since DUContext can be destroyed
+
+- Recurive DUChainReadLocker is not a problem
+
+- Recursive DUChainWriteLocker results in dead-lock
+
+- DUChainWriteLocker while DUChainReadLocker is held results in dead-lock

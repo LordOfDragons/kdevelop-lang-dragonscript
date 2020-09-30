@@ -68,7 +68,11 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 // 	setMinimumFeatures( static_cast<TopDUContext::Features>(
 // 		minimumFeatures() | TopDUContext::AllDeclarationsContextsAndUses ) );
 	
-	readContents();
+	if( readContents() ){
+		qDebug() << "DSParseJob.run: readContents() failed for" << document();
+		abortJob();
+		return;
+	}
 	
 	if( verifyUpdateRequired() ){
 // 		qDebug() << "DSParseJob.run: no update required for" << document();
@@ -189,16 +193,19 @@ bool DSParseJob::verifyUpdateRequired(){
 }
 
 void DSParseJob::prepareTopContext(){
+	{
 	DUChainWriteLocker lock;
 	setDuChain( DUChainUtils::standardContextForUrl( document().toUrl() ) );
-	
-	if( duChain() ){
-		lock.unlock(); // due to translateDUChainToRevision
-		translateDUChainToRevision( duChain() );
-		lock.lock();
-		
-		duChain()->setRange( RangeInRevision( 0, 0, INT_MAX, INT_MAX ) );
 	}
+	
+	if( ! duChain() ){
+		return;
+	}
+	
+	translateDUChainToRevision( duChain() );
+	
+	DUChainWriteLocker lock;
+	duChain()->setRange( RangeInRevision( 0, 0, INT_MAX, INT_MAX ) );
 }
 
 void DSParseJob::findPackage(){
@@ -288,7 +295,7 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 	DeclarationBuilder builder( editor, parsePriority(), editor.session(), pDependencies );
 	setDuChain( builder.build( document(), pStartAst, duChain() ) );
 	
-// 	DumpChain().dump( pDUContext );
+// 	DumpChain().dump( duChain() );
 	return ! builder.requiresRebuild();
 }
 
@@ -316,7 +323,6 @@ bool DSParseJob::buildUses( EditorIntegrator &editor ){
 
 void DSParseJob::parseFailed(){
 //	qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
-	DUChainWriteLocker lock;
 	// if there's already a chain for the document, do some cleanup.
 	if( duChain() ){
 		ParsingEnvironmentFilePointer parsingEnvironmentFile = duChain()->parsingEnvironmentFile();
@@ -324,6 +330,8 @@ void DSParseJob::parseFailed(){
 			//parsingEnvironmentFile->clearModificationRevisions();
 			parsingEnvironmentFile->setModificationRevision( contents().modification );
 		}
+		
+		DUChainWriteLocker lock;
 		duChain()->clearProblems();
 		
 	// otherwise, create a new, empty top context for the file. This serves as a
@@ -332,8 +340,12 @@ void DSParseJob::parseFailed(){
 	}else{
 		ParsingEnvironmentFile * const file = new ParsingEnvironmentFile( document() );
 		file->setLanguage( languageString );
-		ReferencedTopDUContext context = new TopDUContext( document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file );
+		
+		DUChainWriteLocker lock;
+		const ReferencedTopDUContext context( new TopDUContext(
+			document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file ) );
 		context->setType( DUContext::Global );
+		
 		DUChain::self()->addDocumentChain( context );
 		setDuChain( context );
 	}

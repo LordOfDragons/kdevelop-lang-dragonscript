@@ -31,13 +31,13 @@ private:
 public:
 	UseBuilder( EditorIntegrator &editor, const QVector<ImportPackage::Ref> &deps );
 	
-	/** \brief Parser session. */
+	/** Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }
 	
-	/** \brief Enable error reporting. */
+	/** Enable error reporting. */
 	inline bool getEnableErrorReporting() const{ return pEnableErrorReporting; }
 	
-	/** \brief Set if error reporting is enabled. */
+	/** Set if error reporting is enabled. */
 	void setEnableErrorReporting( bool enable );
 	
 	
@@ -62,54 +62,61 @@ protected:
 	void visitStatementFor( StatementForAst *node ) override;
 	
 	/**
-	 * \brief Find context for function call object.
+	 * Get context at position or current content.
+	 * \note Internally locks DUChainReadLocker.
+	 */
+	DUContext *contextAtOrCurrent( const CursorInRevision &pos );
+	
+	/**
+	 * Find context for function call object.
+	 * \note Internally locks DUChainReadLocker.
 	 */
 	DUChainPointer<const DUContext> functionGetContext( AstNode *node,
 		DUChainPointer<const DUContext> context );
 	
-	/**
-	 * \brief Type of node using ExpressionVisitor.
-	 */
+	/** Type of node using ExpressionVisitor. */
 	AbstractType::Ptr typeOfNode( AstNode *node, DUChainPointer<const DUContext> context );
 	
 	/**
-	 * \brief Check function call.
+	 * Check function call.
+	 * \note Internally locks DUChainReadLocker.
 	 */
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
 		const AbstractType::Ptr &argument );
 	
+	/**
+	 * Check function call.
+	 * \note Internally locks DUChainReadLocker.
+	 */
 	void checkFunctionCall( AstNode *node, DUChainPointer<const DUContext> context,
 		const QVector<AbstractType::Ptr> &signature );
 	
 	/**
-	 * \brief Report semantic error if reporting is enabled.
+	 * Report semantic error if reporting is enabled.
+	 * \note Internally locks \em DUChainWriteLocker.
 	 */
 	void reportSemanticError( const RangeInRevision &range, const QString &hint );
 	
 	/**
-	 * \brief Report semantic error if reporting is enabled.
+	 * Report semantic error if reporting is enabled.
+	 * \note Internally locks \em DUChainWriteLocker.
 	 */
 	void reportSemanticError( const RangeInRevision &range, const QString &hint,
 		const QVector<IProblem::Ptr> &diagnostics );
 	
 	/**
-	 * \brief Report semantic hint if reporting is enabled.
+	 * Report semantic hint if reporting is enabled.
+	 * \note Internally locks \em DUChainWriteLocker.
 	 */
 	void reportSemanticHint( const RangeInRevision &range, const QString &hint );
 	
 	
 	
 private:
-	inline int& nextUseIndex()
-	{
+	inline int& nextUseIndex(){
 		return m_nextUseStack.top();
 	}
 	QStack<int> m_nextUseStack;
-	
-	/**
-	 * \brief Get context at position or current content.
-	 */
-	DUContext *contextAtOrCurrent( const CursorInRevision &pos );
 	
 	QVector<IndexedString> m_ignoreVariables;
 };

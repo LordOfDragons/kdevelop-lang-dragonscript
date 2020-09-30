@@ -50,13 +50,17 @@ bool ImportPackage::ensureReady(){
 		return true;
 		
 	case Mode::Pending:{
-		DUChainReadLocker lock;
-		bool allReady = true;
+		{
+		DUChainWriteLocker lock;
+		pContexts.clear();
+		}
+		
 		DUChain &duchain = *DUChain::self();
+		bool allReady = true;
 		
 		pMode = Mode::Parsing;
-		pContexts.clear();
 		
+		DUChainReadLocker lock;
 		foreach( const IndexedString &file, pFiles ){
 			TopDUContext * const context = duchain.chainForDocument( file );
 			
@@ -70,23 +74,29 @@ bool ImportPackage::ensureReady(){
 				if( pDebug ){
 					qDebug() << "ImportPackage.getContexts" << pName << ": File has no context, parsing it:" << file;
 				}
-				ICore::self()->languageController()->backgroundParser()->addDocument(
-					file, TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
-					0, ParseJob::FullSequentialProcessing );
+				ICore::self()->languageController()->backgroundParser()->addDocument( file, TopDUContext::ForceUpdate );
+// 				ICore::self()->languageController()->backgroundParser()->addDocument(
+// 					file, TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
+// 					0, ParseJob::FullSequentialProcessing );
 				allReady = false;
 			}
 		}
+		lock.unlock();
 		
 		if( ! allReady ){
+			DUChainWriteLocker lock;
 			pContexts.clear();
 		}
 		}break;
 		
 	case Mode::Parsing:{
+		{
+		DUChainWriteLocker lock;
+		pContexts.clear();
+		}
+		
 		DUChainReadLocker lock;
 		DUChain &duchain = *DUChain::self();
-		
-		pContexts.clear();
 		
 		foreach( const IndexedString &file, pFiles ){
 			TopDUContext * const context = duchain.chainForDocument( file );
@@ -100,6 +110,9 @@ bool ImportPackage::ensureReady(){
 				if( pDebug ){
 					qDebug() << "ImportPackage.getContexts" << pName << ": File still parsing:" << file;
 				}
+				lock.unlock();
+				
+				DUChainWriteLocker lock;
 				pContexts.clear();
 				break;
 			}
@@ -126,19 +139,18 @@ bool ImportPackage::ensureReady(){
 		pMode = Mode::Ready;
 		
 		foreach( const IndexedString &file, pFiles ){
-			bgparser.addDocument( file, feat, BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
+			bgparser.addDocument( file, feat );
+// 			bgparser.addDocument( file, feat, BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
 		}
 		}break;
 		
 	case Mode::BuildUses:{
-		/*
 		DUChainReadLocker lock;
 		foreach( const ReferencedTopDUContext &each, pContexts ){
 			if( ! ( each->features() & DSParseJob::UpdateUses ) ){
 				return false;
 			}
 		}
-		*/
 		pMode = Mode::Ready;
 		}return true;
 	}
@@ -154,13 +166,13 @@ bool ImportPackage::addImports( TopDUContext *context ){
 		return false;
 	}
 	
-	DUChainWriteLocker lock;
 	QVector<QPair<TopDUContext*, CursorInRevision>> imports;
-	
 	foreach( const ReferencedTopDUContext &each, pContexts ){
 		imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
 	}
-	context->addImportedParentContexts( imports );
+	
+// 	DUChainWriteLocker lock;
+// 	context->addImportedParentContexts( imports );
 	
 	return true;
 }

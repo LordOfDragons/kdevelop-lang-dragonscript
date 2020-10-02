@@ -20,7 +20,7 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-UseBuilder::UseBuilder( EditorIntegrator &editor, const QVector<ImportPackage::Ref> &deps ) :
+UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps ) :
 pParseSession( *editor.parseSession() ),
 pEnableErrorReporting( true ),
 pAllowVoidType( false )

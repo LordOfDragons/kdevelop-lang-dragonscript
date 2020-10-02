@@ -29,7 +29,7 @@ private:
 	
 	
 public:
-	UseBuilder( EditorIntegrator &editor, const QVector<ImportPackage::Ref> &deps );
+	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps );
 	
 	/** Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }

@@ -36,6 +36,7 @@
 #include "ImportPackageLanguage.h"
 #include "ImportPackageDragengine.h"
 #include "ImportPackageDirectory.h"
+#include "DelayedParsing.h"
 
 
 using namespace KDevelop;
@@ -47,7 +48,18 @@ static const IndexedString languageString( "DragonScript" );
 DSParseJob::DSParseJob( const IndexedString &url, ILanguageSupport *languageSupport ) :
 ParseJob( url, languageSupport ),
 pParentJob( nullptr ),
-pStartAst( nullptr ){
+pStartAst( nullptr )
+{
+// 	DelayedParsing::self().setDebugEnabled( true );
+	
+	// accprdomg to milian project object is only allowed to be accessed in the constructor
+	IProject * const project = ICore::self()->projectController()->findProjectForUrl( url.toUrl() );
+	if( project ){
+		pProjectFiles = project->fileSet();
+		
+		const KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
+		pProjectIncludePath = config.readEntry( "pathInclude", QStringList() );
+	}
 }
 
 DSParseJob::~DSParseJob(){
@@ -57,29 +69,15 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	Q_UNUSED(self)
 	Q_UNUSED(thread)
 	
-// 	const QReadLocker parseLock( languageSupport()->parseLock() );
+	const QReadLocker parseLock( languageSupport()->parseLock() );
+	pReparsePriority = parsePriority();
+// 	qDebug() << "DSParseJob: RUN phase" << phaseFromFlags(minimumFeatures()) << "priority" << parsePriority() << "for" << document();
 	
-	// prepare
-	if( checkAbort() ){
+	// prepare for parsing
+	if( checkAbort() || ! prepare() ){
 		return;
 	}
-	
-	// clang module does this claiming it is needed to get all information in all project files
-// 	setMinimumFeatures( static_cast<TopDUContext::Features>(
-// 		minimumFeatures() | TopDUContext::AllDeclarationsContextsAndUses ) );
-	
-	if( readContents() ){
-		qDebug() << "DSParseJob.run: readContents() failed for" << document();
-		abortJob();
-		return;
-	}
-	
-	if( verifyUpdateRequired() ){
-// 		qDebug() << "DSParseJob.run: no update required for" << document();
-		return;
-	}
-	
-	prepareTopContext();
+// 	qDebug() << "DSParseJob.run: start phase" << pPhase << "for" << document();
 	
 	// parse document
 	ParseSession session( document(), contents().contents );
@@ -97,30 +95,52 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		findPackage();
 		findDependencies();
 		
+		// verify all files in the package or project are on the same phase or higher
+		if( ! allFilesRequiredPhase() ){
+			abortJob();
+			reparseLater( pPhase );
+			return;
+		}
+		
 // 		qDebug() << "DSParseJob.run: dependencies ready for" << document();
 		EditorIntegrator editor( session );
 		
+// 		qDebug() << "DSParseJob.run: build declaration phase" << pPhase << "features" << minimumFeatures() << "for" << document();
 		if( ! buildDeclaration( editor ) ){
-			reparseLater();
+			abortJob();
+			reparseLater( pPhase );
 			return;
 		}
 		if( checkAbort() ){
 			return;
 		}
 		
-		//if( ( minimumFeatures() & UpdateUses ) || ! pPackage ){
-			// for packages wait until all files finished building declarations.
-			// we will be triggered again once this happens to update uses
+		if( pPhase > 2 ){
 			if( ! buildUses( editor ) ){
-				reparseLater();
+				abortJob();
+				reparseLater( pPhase );
 				return;
 			}
 			if( checkAbort() ){
 				return;
 			}
+		}
+		
+		highlightDUChain();
+		
+		qDebug() << "DSParseJob.run: finished phase" << pPhase << "for" << document();
+		
+		if( pPhase < 3 ){
+			if( duChain() ){
+				// use builder updates features, other phases not. fix this here
+				const int features = minimumFeatures() | phaseFlags( pPhase );
+				DUChainWriteLocker lock;
+				duChain()->setFeatures( static_cast<TopDUContext::Features>( features ) );
+			}
 			
-			highlightDUChain();
-		//}
+			pReparsePriority += 10;
+			reparseLater( pPhase + 1 );
+		}
 		
 	}else{
 		parseFailed();
@@ -140,7 +160,31 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	
 	finishTopContext();
 	
+	DelayedParsing::self().parsingFinished( document() );
+	
 	DUChain::self()->emitUpdateReady( document(), duChain() );
+}
+
+bool DSParseJob::prepare(){
+	// read content
+	if( readContents() ){
+		qDebug() << "DSParseJob.run: readContents() failed for" << document();
+		abortJob();
+		return false;
+	}
+	
+	// verify update requirements
+	if( verifyUpdateRequired() ){
+// 		qDebug() << "DSParseJob.run: no update required for" << document();
+		return false;
+	}
+	
+	// determine the phase to use for parsing
+	pPhase = phaseFromFlags( minimumFeatures() );
+	
+	// prepare top context
+	prepareTopContext();
+	return true;
 }
 
 bool DSParseJob::checkAbort(){
@@ -213,7 +257,7 @@ void DSParseJob::findDependencies(){
 	
 	// if the file belongs to a package add the dependencies of the package
 	if( pPackage ){
-		pDependencies << pPackage->dependsOn();
+		pDependencies.unite( pPackage->dependsOn() );
 		return;
 	}
 	
@@ -226,11 +270,6 @@ void DSParseJob::findDependencies(){
 	pDependencies << ImportPackageDragengine::self();
 	
 	// add import package for each project import set by the user
-	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document().toUrl() );
-	if( ! project ){
-		return;
-	}
-	
 	/*
 	const KSharedConfigPtr config( project->projectConfiguration() );
 	foreach( const QString &each, config->additionalConfigSources() ){
@@ -238,10 +277,7 @@ void DSParseJob::findDependencies(){
 	}
 	*/
 	
-	const KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
-	const QStringList list( config.readEntry( "pathInclude", QStringList() ) );
-	
-	foreach( const QString &dir, list ){
+	foreach( const QString &dir, pProjectIncludePath ){
 		const QString name( QString( "#dir#" ) + dir );
 		ImportPackage::Ref package( importPackages.packageNamed( name ) );
 		if( ! package ){
@@ -252,18 +288,157 @@ void DSParseJob::findDependencies(){
 	}
 }
 
-void DSParseJob::reparseLater( int addFeatures ){
-	abortJob();
+bool DSParseJob::allFilesRequiredPhase(){
+	// verify all other files in the same package or project have phase which is are least
+	// one less than the parsing phase. hence all other files finished the previouis phase.
+	// this check is not done for phase 1 since this is the first phase
+	if( pPhase < 2 ){
+		return true;
+	}
 	
-	const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
-			minimumFeatures() | TopDUContext::VisibleDeclarationsAndContexts
-			| Resheduled | addFeatures );
-	ICore::self()->languageController()->backgroundParser()->addDocument( document(),
-		feat, parsePriority(), nullptr, DSParseJob::FullSequentialProcessing, 500 );
+	DUChainReadLocker lock;
+	QSet<IndexedString> files;
+	
+	if( pPackage ){
+		files.unite( pPackage->files() );
+		
+	}else{
+		files.unite( pProjectFiles );
+	}
+	
+	BackgroundParser &bp = *ICore::self()->languageController()->backgroundParser();
+	DUChain &duchain = *DUChain::self();
+	const int minPhase = pPhase - 1;
+	bool allPassed = true;
+	
+	foreach( const IndexedString &file, files ){
+		if( file == document() ){
+			continue;
+		}
+		
+		TopDUContext * const context = duchain.chainForDocument( file );
+		if( ! context ){
+			// file has no context. we do not know yet what phase it has
+// 			qDebug() << "DSParseJob.run: no context for" << file << "for" << document();
+			
+			if( bp.isQueued( file ) ){
+				pReparsePriority = qMax( pReparsePriority, bp.priorityForDocument( file ) );
+			}
+			pWaitForFiles << file;
+			allPassed = false;
+			continue;
+			//return false;
+		}
+		
+		const int phase = phaseFromFlags( context->features() );
+		if( phase < minPhase ){
+			// context not at the required phase yet
+// 			qDebug() << "DSParseJob.run: phase" << phase << "file" << file << "too low" << pPhase << "for" << document();
+			
+			if( bp.isQueued( file ) ){
+				pReparsePriority = qMax( pReparsePriority, bp.priorityForDocument( file ) );
+			}
+			pWaitForFiles << file;
+			allPassed = false;
+			continue;
+			//return false;
+		}
+	}
+	
+	return allPassed;
+}
+
+void DSParseJob::reparseLater( int phase ){
+	const int features = minimumFeatures()
+		| TopDUContext::VisibleDeclarationsAndContexts
+// 		| TopDUContext::ForceUpdate
+		| Resheduled
+		| phaseFlags( phase );
+	
+	// this one here is beyond tricky.
+	// 
+	// NOTE things figured out dissecting the kdevelop source code:
+	// 
+	// - addDocument() queues document in a documents list as well as in a dictionary
+	//   mapping priorities to documents
+	//   
+	// - when a thread picks the next document to parse it checks first for priority.
+	//   this check finds the highgest priority (meaning least proprity value) from
+	//   all "running jobs" that "respect sequential processing". jobs requiring
+	//   sequential processing are not picked if their priority value is larger than
+	//   the found threshold.
+	//   
+	//   this system has a huge problem because in contrary to what one would expect
+	//   from reading the header comments this does not run the jobs in the expect order.
+	//   
+	//   one reason is that only "running jobs" priorities are examined instead
+	//   of "pending jobs" and "running jobs" priorities.
+	//   
+	//   the second problem is that the pending documents list seems to be a QSet.
+	//   I'm not sure about this since I could not find the variable declaration
+	//   but the code uses insert(x) and this method exists in QSet. if this is the
+	//   case then re-parsing a file adds the file in the same spot in the QSet.
+	//   pairing this with the problem above results in the same tasks being picked
+	//   over and over. because only running jobs priorities are examine the jobs
+	//   with higher priority never get a chance to run and the background parser
+	//   loops forever.
+	//   
+	//   in a nutshell this problem causes task rescheduled to wait for a condition
+	//   to become true to end up in the same queue spot causing the background
+	//   parser to dead-loop. in particular this means:
+	//   - priorities will not solve the problem
+	//   - using sequential will not solve the problem
+	//   - using non-sequential will not solve the problem
+	//   
+	//   and as a result of these problems the following holds true:
+	//   - re-scheduling parse jobs waiting for condition WILL dead-loop
+	//   
+	// - ThreadWeaver::QObjectDecorator::done and ThreadWeaver::QObjectDecorator::failed
+	//   both link to the same method. aborting jobs has thus no effect at all since the
+	//   underlaying code does not recognize the difference
+	// 
+// 	const int priority = qMin( pReparsePriority, (int)KDevelop::BackgroundParser::WorstPriority );
+	int priority = 0;
+	/*
+	switch( phase ){
+	case 2:
+		priority = 25;
+		break;
+		
+	case 3:
+		priority = 50;
+		break;
+	}
+	
+	int dependencyDepth = 0;
+	foreach( const ImportPackage::Ref &dependency, pDependencies ){
+		dependencyDepth = qMax( dependencyDepth, dependency->dependencyDepth() + 1 );
+	}
+	priority += 100 * dependencyDepth;
+	*/
+	priority = parsePriority();
+// 	qDebug() << "DSParseJob.reparseLater: phase" << phase << "priority" << priority << "for" << document();
+	
+	if( pWaitForFiles.isEmpty() ){
+		ICore::self()->languageController()->backgroundParser()->addDocument( document(),
+			static_cast<TopDUContext::Features>( features ), priority, nullptr,
+			IgnoresSequentialProcessing, 10 );
+		
+	}else{
+		DelayedParsing::self().waitFor( document(), pWaitForFiles,
+			static_cast<TopDUContext::Features>( features ), priority );
+	}
+	
+// 	ICore::self()->languageController()->backgroundParser()->addDocument( document(),
+// 		static_cast<TopDUContext::Features>( features ), priority,
+// 		nullptr, FullSequentialProcessing );
+	
+// 	ICore::self()->languageController()->backgroundParser()->addDocument( document(),
+// 		static_cast<TopDUContext::Features>( features ), priority,
+// 		nullptr, FullSequentialProcessing, 500 );
 }
 
 bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
-// 	qDebug() << "DSParseJob.run: build declarations for " << document();
 	if( duChain() ){
 		DUChainWriteLocker lock;
 		duChain()->clearImportedParentContexts();
@@ -271,26 +446,34 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 		duChain()->clearProblems();
 	}
 	
-	DeclarationBuilder builder( editor, parsePriority(), editor.session(), pDependencies );
+	DeclarationBuilder builder( editor, editor.session(), pDependencies, pPhase );
 	setDuChain( builder.build( document(), pStartAst, duChain() ) );
 	
 // 	DumpChain().dump( duChain() );
-	return ! builder.requiresRebuild();
-}
-
-bool DSParseJob::buildUses( EditorIntegrator &editor ){
-// 	qDebug() << "DSParseJob.run: build uses for " << document();
-	// gather uses of variables and functions on the document
-	UseBuilder usebuilder( editor, pDependencies );
-	usebuilder.buildUses( pStartAst );
-	
-	if( usebuilder.requiresRebuild() ){
+	if( builder.requiresRebuild() ){
+		pReparsePriority = qMax( pReparsePriority, builder.reparsePriority() + 10 );
+		pWaitForFiles.unite( builder.waitForFiles() );
 		return false;
 	}
 	
-	// some internal housekeeping work
+	return true;
+}
+
+bool DSParseJob::buildUses( EditorIntegrator &editor ){
+	// gather uses of variables and functions on the document
+	UseBuilder builder( editor, pDependencies );
+	builder.buildUses( pStartAst );
+	
+	if( builder.requiresRebuild() ){
+		pReparsePriority = qMax( pReparsePriority, builder.reparsePriority() + 10 );
+		pWaitForFiles.unite( builder.waitForFiles() );
+		return false;
+	}
+	
+	const int features = minimumFeatures() | phaseFlags( 3 );
 	DUChainWriteLocker lock;
-	duChain()->setFeatures( minimumFeatures() );
+	duChain()->setFeatures( static_cast<TopDUContext::Features>( features ) );
+	
 	ParsingEnvironmentFilePointer parsingEnvironmentFile = duChain()->parsingEnvironmentFile();
 	if( parsingEnvironmentFile ){
 		parsingEnvironmentFile->setModificationRevision( contents().modification );
@@ -301,7 +484,12 @@ bool DSParseJob::buildUses( EditorIntegrator &editor ){
 }
 
 void DSParseJob::parseFailed(){
-//	qDebug() << "KDevDScript: DSParseJob::run: Parsing failed" << document().str();
+	qDebug() << "DSParseJob.parseFailed:" << document();
+	
+	// force context to phase 3
+	const int features = minimumFeatures() | phaseFlags( 3 );
+	pPhase = 3;
+	
 	// if there's already a chain for the document, do some cleanup.
 	if( duChain() ){
 		ParsingEnvironmentFilePointer parsingEnvironmentFile = duChain()->parsingEnvironmentFile();
@@ -311,6 +499,7 @@ void DSParseJob::parseFailed(){
 		}
 		
 		DUChainWriteLocker lock;
+		duChain()->setFeatures( static_cast<TopDUContext::Features>( features ) );
 		duChain()->clearProblems();
 		
 	// otherwise, create a new, empty top context for the file. This serves as a
@@ -324,6 +513,7 @@ void DSParseJob::parseFailed(){
 		const ReferencedTopDUContext context( new TopDUContext(
 			document(), RangeInRevision( 0, 0, INT_MAX, INT_MAX ), file ) );
 		context->setType( DUContext::Global );
+		context->setFeatures( static_cast<TopDUContext::Features>( features ) );
 		
 		DUChain::self()->addDocumentChain( context );
 		setDuChain( context );
@@ -342,6 +532,35 @@ void DSParseJob::finishTopContext(){
 
 void DSParseJob::setParentJob( DSParseJob *job ){
 	pParentJob = job;
+}
+
+int DSParseJob::phaseFlags( int phase ){
+	switch( phase ){
+	case 2:
+		return Phase1 | Phase2;
+		
+	case 3:
+		return Phase1 | Phase2 | Phase3;
+		
+	default:
+		return Phase1;
+	}
+}
+
+int DSParseJob::phaseFromFlags( int flags ){
+	// ForceUpdate seems to be present in scheduled reparsing although the flag is not set.
+	// seems to be added automatically. we can not use it thus for anything
+// 	if( minimumFeatures() & TopDUContext::ForceUpdate ){
+// 		return 1;
+// 	}
+	
+	if( flags & Phase3 ){
+		return 3;
+	}
+	if( flags & Phase2 ){
+		return 2;
+	}
+	return 1;
 }
 
 bool DSParseJob::hasParentDocument( const IndexedString &doc ){
@@ -368,7 +587,6 @@ EditorIntegrator *editor, IProblem::Source source, IProblem::Severity severity )
 	p->setSeverity( severity );
 	p->setDescription( description );
 	p->setFinalLocation( DocumentRange( document(), editor->findRange( *node ).castToSimpleRange() ) );
-// 	qDebug() << "KDevDScript: DSParseJob::run:" << p->description();
 	return p;
 }
 

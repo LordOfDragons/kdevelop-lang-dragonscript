@@ -14,7 +14,6 @@
 #include "ExpressionVisitor.h"
 #include "PinNamespaceVisitor.h"
 #include "Helpers.h"
-
 #include "../parser/ParseSession.h"
 
 
@@ -22,13 +21,12 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor, int ownPriority,
-	const ParseSession &parseSession, const QVector<ImportPackage::Ref> &deps ) :
+DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor,
+const ParseSession &parseSession, const QSet<ImportPackage::Ref> &deps, int phase ) :
 DeclarationBuilderBase(),
-pParseSession( parseSession )
+pParseSession( parseSession ),
+pPhase( phase )
 {
-	Q_UNUSED( ownPriority );
-	
 	setDependencies( deps );
 	setEditor( &editor );
 }
@@ -74,7 +72,7 @@ void DeclarationBuilder::visitScriptDeclaration( ScriptDeclarationAst *node ){
 }
 
 void DeclarationBuilder::visitPin( PinAst *node ){
-	if( ! node->name->nameSequence ){
+	if( ! node->name->nameSequence || pPhase < 2 ){
 		return;
 	}
 	
@@ -201,49 +199,51 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	}
 	
 	// add base class and interfaces
-	if( node->begin->extends ){
-		DUChainReadLocker lock;
-		ExpressionVisitor exprvisitor( *editor(), currentContext() );
-		exprvisitor.visitNode( node->begin->extends );
-		
-		if( exprvisitor.lastType()
-		&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-			const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
-			BaseClassInstance base;
-			base.baseClass = baseType->indexed();
-			base.access = Declaration::Public;
-			decl->addBaseClass( base );
-		}
-		
-	}else if( document() != Helpers::getDocumentationFileObject() ){
-		// set object as base class. this is only done if this is not the object class
-		// from the documentation being parsed
-		DUChainReadLocker lock;
-		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
-		if( typeDecl && typeDecl->abstractType() ){
-			BaseClassInstance base;
-			base.baseClass = typeDecl->abstractType()->indexed();
-			base.access = Declaration::Public;
-			decl->addBaseClass( base );
-		}
-	}
-	
-	if( node->begin->implementsSequence ){
-		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
-		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
-		DUChainReadLocker lock;
-		do{
+	if( pPhase > 1 ){
+		if( node->begin->extends ){
+			DUChainReadLocker lock;
 			ExpressionVisitor exprvisitor( *editor(), currentContext() );
-			exprvisitor.visitNode( iter->element );
-			if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
+			exprvisitor.visitNode( node->begin->extends );
+			
+			if( exprvisitor.lastType()
+			&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 				const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
 				BaseClassInstance base;
 				base.baseClass = baseType->indexed();
 				base.access = Declaration::Public;
 				decl->addBaseClass( base );
 			}
-			iter = iter->next;
-		}while( iter != end );
+			
+		}else if( document() != Helpers::getDocumentationFileObject() ){
+			// set object as base class. this is only done if this is not the object class
+			// from the documentation being parsed
+			DUChainReadLocker lock;
+			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
+			if( typeDecl && typeDecl->abstractType() ){
+				BaseClassInstance base;
+				base.baseClass = typeDecl->abstractType()->indexed();
+				base.access = Declaration::Public;
+				decl->addBaseClass( base );
+			}
+		}
+		
+		if( node->begin->implementsSequence ){
+			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
+			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
+			DUChainReadLocker lock;
+			do{
+				ExpressionVisitor exprvisitor( *editor(), currentContext() );
+				exprvisitor.visitNode( iter->element );
+				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
+					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
+					BaseClassInstance base;
+					base.baseClass = baseType->indexed();
+					base.access = Declaration::Public;
+					decl->addBaseClass( base );
+				}
+				iter = iter->next;
+			}while( iter != end );
+		}
 	}
 	
 	// continue
@@ -269,6 +269,9 @@ void DeclarationBuilder::visitClassBodyDeclaration( ClassBodyDeclarationAst *nod
 }
 
 void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *node ){
+	if( pPhase < 2 ){
+		return;
+	}
 	if( ! node->variablesSequence ){
 		return;
 	}
@@ -312,6 +315,10 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 }
 
 void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *node ){
+	if( pPhase < 2 ){
+		return;
+	}
+	
 	ClassFunctionDeclaration *decl;
 	
 	if( node->begin->name ){
@@ -421,35 +428,37 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	decl->setClassModifier( ClassDeclarationData::Abstract );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
-	// set object as base class
-	{
-	DUChainReadLocker lock;
-	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
-	if( typeDecl && typeDecl->abstractType() ){
-		BaseClassInstance base;
-		base.baseClass = typeDecl->abstractType()->indexed();
-		base.access = Declaration::Public;
-		decl->addBaseClass( base );
-	}
-	}
-	
-	// add interfaces
-	if( node->begin->implementsSequence ){
-		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
-		const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
+	if( pPhase > 1 ){
+		// set object as base class
+		{
 		DUChainReadLocker lock;
-		do{
-			ExpressionVisitor exprvisitor( *editor(), currentContext() );
-			exprvisitor.visitNode( iter->element );
-			if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-				const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
-				BaseClassInstance base;
-				base.baseClass = baseType->indexed();
-				base.access = Declaration::Public;
-				decl->addBaseClass( base );
-			}
-			iter = iter->next;
-		}while( iter != end );
+		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeObject() );
+		if( typeDecl && typeDecl->abstractType() ){
+			BaseClassInstance base;
+			base.baseClass = typeDecl->abstractType()->indexed();
+			base.access = Declaration::Public;
+			decl->addBaseClass( base );
+		}
+		}
+		
+		// add interfaces
+		if( node->begin->implementsSequence ){
+			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *iter = node->begin->implementsSequence->front();
+			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
+			DUChainReadLocker lock;
+			do{
+				ExpressionVisitor exprvisitor( *editor(), currentContext() );
+				exprvisitor.visitNode( iter->element );
+				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
+					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
+					BaseClassInstance base;
+					base.baseClass = baseType->indexed();
+					base.access = Declaration::Public;
+					decl->addBaseClass( base );
+				}
+				iter = iter->next;
+			}while( iter != end );
+		}
 	}
 	
 	// body
@@ -475,6 +484,9 @@ void DeclarationBuilder::visitInterfaceBodyDeclaration( InterfaceBodyDeclaration
 }
 
 void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ){
+	if( pPhase < 2 ){
+		return;
+	}
 	if( ! node->begin->type ){
 		return; // used for constructors. should never happen here
 	}
@@ -560,15 +572,15 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	
 	// base class. this is only done if this is not the enumeration class from
 	// the documentation being parsed
-	{
-	DUChainReadLocker lock;
-	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeEnumeration() );
-	if( typeDecl && typeDecl->abstractType() ){
-		BaseClassInstance base;
-		base.baseClass = typeDecl->abstractType()->indexed();
-		base.access = Declaration::Public;
-		decl->addBaseClass( base );
-	}
+	if( pPhase > 1 ){
+		DUChainReadLocker lock;
+		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeEnumeration() );
+		if( typeDecl && typeDecl->abstractType() ){
+			BaseClassInstance base;
+			base.baseClass = typeDecl->abstractType()->indexed();
+			base.access = Declaration::Public;
+			decl->addBaseClass( base );
+		}
 	}
 	
 	// body
@@ -581,7 +593,9 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	openContextEnumeration( node );
 	decl->setInternalContext( currentContext() );
 	
-	DeclarationBuilderBase::visitEnumeration( node );
+	if( pPhase > 1 ){
+		DeclarationBuilderBase::visitEnumeration( node );
+	}
 	
 	closeContext();
 	closeType();
@@ -589,6 +603,8 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 }
 
 void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	ClassMemberDeclaration * const decl = openDeclaration<ClassMemberDeclaration>(
 		node->name, node->name, DeclarationFlags::NoFlags );
 	
@@ -614,6 +630,8 @@ void DeclarationBuilder::visitEnumerationBody( EnumerationBodyAst *node ){
 }
 
 void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	openContext( node, DUContext::Other, QualifiedIdentifier( "{block}" ) );
 	
 	if( node->begin->argumentsSequence ){
@@ -644,6 +662,8 @@ void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 }
 
 void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	// if
 	visitNode( node->condition );
 	
@@ -686,6 +706,8 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 }
 
 void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
@@ -703,6 +725,8 @@ void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
 }
 
 void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	visitNode( node->value );
 	
 	// cases
@@ -731,6 +755,8 @@ void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
 }
 
 void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	if( node->matchesSequence ){
 		const KDevPG::ListNode<ExpressionAst*> *iter = node->matchesSequence->front();
 		const KDevPG::ListNode<ExpressionAst*> *end = iter;
@@ -755,6 +781,8 @@ void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
 }
 
 void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	visitNode( node->variable );
 	visitNode( node->from );
 	visitNode( node->to );
@@ -776,6 +804,8 @@ void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
 }
 
 void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
@@ -793,6 +823,8 @@ void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
 }
 
 void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	if( node->bodySequence ){
 		openContext( node, DUContext::Other, QualifiedIdentifier( "{try}" ) );
 		
@@ -817,6 +849,8 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 }
 
 void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	openContext( node, DUContext::Other, QualifiedIdentifier( "{catch}" ) );
 	
 	if( node->variable ){
@@ -849,6 +883,8 @@ void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 }
 
 void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDefinitionsAst *node ){
+	// NOTE called only if pPhase > 1
+	
 	if( ! node->variablesSequence ){
 		return;
 	}

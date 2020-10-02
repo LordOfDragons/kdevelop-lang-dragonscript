@@ -4,6 +4,7 @@
 #include <language/duchain/builders/abstractcontextbuilder.h>
 #include <language/editor/rangeinrevision.h>
 #include <language/duchain/topducontext.h>
+#include <serialization/indexedstring.h>
 
 #include "dsp_defaultvisitor.h"
 #include "duchainexport.h"
@@ -27,8 +28,10 @@ class KDEVDSDUCHAIN_EXPORT ContextBuilder : public ContextBuilderBase, public De
 private:
 	EditorIntegrator *pEditor = nullptr;
 	int pNamespaceContextCount = 0;
-	QVector<ImportPackage::Ref> pDependencies;
+	QSet<ImportPackage::Ref> pDependencies;
 	bool pRequiresRebuild = false;
+	int pReparsePriority = 0;
+	QSet<IndexedString> pWaitForFiles;
 	
 	
 	
@@ -38,11 +41,17 @@ public:
 	EditorIntegrator *editor() const{ return pEditor; }
 	void setEditor( EditorIntegrator *editor );
 	
-	inline const QVector<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
-	void setDependencies( const QVector<ImportPackage::Ref> &deps );
+	inline const QSet<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
+	void setDependencies( const QSet<ImportPackage::Ref> &deps );
 	
 	inline bool requiresRebuild() const{ return pRequiresRebuild; }
 	void setRequiresRebuild( bool failed );
+	
+	inline int reparsePriority() const{ return pReparsePriority; }
+	void setReparsePriority( int priority );
+	
+	inline QSet<IndexedString> &waitForFiles(){ return pWaitForFiles; }
+	inline const QSet<IndexedString> &waitForFiles() const{ return pWaitForFiles; }
 	
 	void startVisiting( AstNode *node ) override;
 	

@@ -25,6 +25,8 @@ set(duchain_STAT_SRCS
 	ImportPackageDirectory.h
 	ImportPackages.cpp
 	ImportPackages.h
+	DelayedParsing.cpp
+	DelayedParsing.h
 )
 
 add_library(kdevdsduchain STATIC ${duchain_SRCS} ${duchain_STAT_SRCS})

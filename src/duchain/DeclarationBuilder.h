@@ -29,13 +29,14 @@ class KDEVDSDUCHAIN_EXPORT DeclarationBuilder : public DeclarationBuilderBase{
 private:
 	const ParseSession &pParseSession;
 	QList<bool> pNamespaceContexts;
+	int pPhase;
 	int pLastModifiers;
 	
 	
 	
 public:
-	DeclarationBuilder( EditorIntegrator &editor, int ownPriority,
-		const ParseSession &parseSession, const QVector<ImportPackage::Ref> &deps );
+	DeclarationBuilder( EditorIntegrator &editor, const ParseSession &parseSession,
+		const QSet<ImportPackage::Ref> &deps, int phase );
 	~DeclarationBuilder() override;
 	
 	/** Close namespace contexts. */

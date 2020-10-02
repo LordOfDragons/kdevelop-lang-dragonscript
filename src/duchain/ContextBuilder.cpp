@@ -22,12 +22,16 @@ void ContextBuilder::setEditor( EditorIntegrator *editor ){
 	pEditor = editor;
 }
 
-void ContextBuilder::setDependencies( const QVector<ImportPackage::Ref> &deps ){
+void ContextBuilder::setDependencies( const QSet<ImportPackage::Ref> &deps ){
 	pDependencies = deps;
 }
 
 void ContextBuilder::setRequiresRebuild( bool rebuild ){
 	pRequiresRebuild = rebuild;
+}
+
+void ContextBuilder::setReparsePriority( int priority ){
+	pReparsePriority = priority;
 }
 
 void ContextBuilder::startVisiting( AstNode *node ){
@@ -41,17 +45,25 @@ void ContextBuilder::startVisiting( AstNode *node ){
 		foreach( const ImportPackage::Ref &each, dependencies() ){
 // 			qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
 			
-			const QVector<TopDUContext*> contexts( each->contexts() );
-			if( contexts.isEmpty() ){
+			ImportPackage::State state;
+			each->contexts( state );
+			if( state.ready ){
+				foreach( TopDUContext *each, state.importContexts ){
+					imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
+				}
+				
+			}else{
 // 				qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
 // 					<< each->name() << " as import for" << document();
-				setRequiresRebuild( true );
-				return;
+				pRequiresRebuild = true;
+				pReparsePriority = qMax( pReparsePriority, state.reparsePriority );
+				pWaitForFiles.unite( state.waitForFiles );
+// 				return;
 			}
-			
-			foreach( TopDUContext *each, contexts ){
-				imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
-			}
+		}
+		
+		if( pRequiresRebuild ){
+			return;
 		}
 		
 		top->addImportedParentContexts( imports );

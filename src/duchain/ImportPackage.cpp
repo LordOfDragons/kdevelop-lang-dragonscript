@@ -23,7 +23,7 @@ ImportPackage::ImportPackage() :
 pDebug( false ){
 }
 
-ImportPackage::ImportPackage( const QString &name, const QVector<IndexedString> &files ) :
+ImportPackage::ImportPackage( const QString &name, const QSet<IndexedString> &files ) :
 pName( name ),
 pFiles( files ),
 pDebug( false ){
@@ -32,53 +32,68 @@ pDebug( false ){
 ImportPackage::~ImportPackage(){
 }
 
-QVector<TopDUContext*> ImportPackage::contexts(){
+void ImportPackage::contexts( State &state ){
+	BackgroundParser &bp = *ICore::self()->languageController()->backgroundParser();
 	DUChain &duchain = *DUChain::self();
-	QVector<TopDUContext*> list;
-	bool allReady = true;
+	state.ready = true;
+	state.reparsePriority = 0;
+	state.importContexts.clear();
+	state.waitForFiles.clear();
 	
+	// dragonscript works a bit different than other languages. script files always
+	// belong to a namespace and all files in the namespace are visible without
+	// needing an import statement. due to this the normal way of parsing files once
+	// is not working. we have to parse the files up to three times to properly
+	// resolve all uses. this is done by using custom feature flags on the top context.
+	// only when all files in the package reached phase 3 the package can be used.
+	// 
+	// phases are always run through from 1 to 3 no matter if something can not be
+	// resolved. this ensures no deadloops can happen nor possible resolves are missed.
+	// we get a finished context after each phase is completed
 	foreach( const IndexedString &file, pFiles ){
 		TopDUContext * const context = duchain.chainForDocument( file );
 		
 		if( context ){
+			const int phase = DSParseJob::phaseFromFlags( context->features() );
 			if( pDebug ){
-				qDebug() << "ImportPackage.getContexts" << pName << ": File has context:" << file;
+				qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase" << phase << ":" << file;
 			}
-			list.append( context );
+			
+			if( phase < 3 ){
+// 				qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase" << phase << ":" << file;
+				if( bp.isQueued( file ) ){
+					state.reparsePriority = qMax( state.reparsePriority, bp.priorityForDocument( file ) );
+				}
+				state.waitForFiles << file;
+				state.ready = false;
+				
+			}else{
+				state.importContexts << context;
+			}
 			
 		}else{
 			if( pDebug ){
 				qDebug() << "ImportPackage.getContexts" << pName << ": File has no context, parsing it:" << file;
 			}
 			ICore::self()->languageController()->backgroundParser()->addDocument( file, TopDUContext::ForceUpdate );
-// 			ICore::self()->languageController()->backgroundParser()->addDocument(
-// 				file, TopDUContext::ForceUpdate, BackgroundParser::BestPriority,
-// 				0, ParseJob::FullSequentialProcessing );
-			allReady = false;
+			state.waitForFiles << file;
+			state.ready = false;
 		}
 	}
 	
-	if( ! allReady ){
-		return {};
+	if( ! state.ready ){
+		state.importContexts.clear();
+	}
+}
+
+int ImportPackage::dependencyDepth() const{
+	int depth = 0;
+	
+	foreach( const Ref &each, pDependsOn ){
+		depth = qMax( depth, each->dependencyDepth() + 1 );
 	}
 	
-#if 0
-	// re-parse all script files. this is required since script files usually
-	// contain inter-script dependencies and the parsing order is undefined.
-	// this reparsing has no effect on the context but will trigger reparsing
-	// of source files once the individual files are updated
-	BackgroundParser &bgparser = *ICore::self()->languageController()->backgroundParser();
-	const TopDUContext::Features feat = static_cast<TopDUContext::Features>(
-		TopDUContext::VisibleDeclarationsAndContexts
-		| DSParseJob::Resheduled /*| DSParseJob::UpdateUses*/ );
-	
-	foreach( const IndexedString &file, pFiles ){
-		bgparser.addDocument( file, feat );
-// 		bgparser.addDocument( file, feat, BackgroundParser::BestPriority, 0, ParseJob::FullSequentialProcessing );
-	}
-#endif
-	
-	return list;
+	return depth;
 }
 
 void ImportPackage::reparse()

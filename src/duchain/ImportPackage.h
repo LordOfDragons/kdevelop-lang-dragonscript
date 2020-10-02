@@ -2,7 +2,7 @@
 #define IMPORTPACKAGE_H
 
 #include <QString>
-#include <QVector>
+#include <QSet>
 #include <QSharedPointer>
 
 #include <language/duchain/topducontext.h>
@@ -21,12 +21,27 @@ public:
 	/** Typedef shared pointer. */
 	typedef QSharedPointer<ImportPackage> Ref;
 	
+	/** State. */
+	struct State{
+		/** Package is ready. */
+		bool ready;
+		
+		/** Contexts required to be added as imports. */
+		QSet<TopDUContext*> importContexts;
+		
+		/** If not ready the priority to use for reparsing. */
+		int reparsePriority;
+		
+		/** File to wait for. */
+		QSet<IndexedString> waitForFiles;
+	};
+	
 	
 	
 	/**
 	 * Create package tracker. Starts importing as soon as required.
 	 */
-	ImportPackage( const QString &name, const QVector<IndexedString> &files );
+	ImportPackage( const QString &name, const QSet<IndexedString> &files );
 	
 	/** Clean up import package. */
 	virtual ~ImportPackage();
@@ -41,7 +56,7 @@ public:
 	/**
 	 * Files included in the package.
 	 */
-	inline const QVector<IndexedString> &files() const{ return pFiles; }
+	inline const QSet<IndexedString> &files() const{ return pFiles; }
 	
 	
 	
@@ -51,13 +66,19 @@ public:
 	 * 
 	 * \note DUChainReadLocker required.
 	 */
-	QVector<TopDUContext*> contexts();
+	void contexts( State &state );
 	
 	/**
 	 * Packages this package depends on.
 	 */
-	inline QVector<Ref> dependsOn(){ return pDependsOn; }
-	inline const QVector<Ref> &dependsOn() const{ return pDependsOn; }
+	inline QSet<Ref> dependsOn(){ return pDependsOn; }
+	inline const QSet<Ref> &dependsOn() const{ return pDependsOn; }
+	
+	/**
+	 * Recusrive dependency depth.
+	 */
+	int dependencyDepth() const;
+	
 	
 	/**
 	 * Reparse files.
@@ -72,9 +93,9 @@ protected:
 	
 	
 	QString pName;
-	QVector<IndexedString> pFiles;
+	QSet<IndexedString> pFiles;
 	
-	QVector<Ref> pDependsOn;
+	QSet<Ref> pDependsOn;
 	
 	bool pDebug;
 };

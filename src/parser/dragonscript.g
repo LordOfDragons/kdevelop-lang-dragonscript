@@ -239,7 +239,7 @@ COMMAND_SEPARATOR | LINEBREAK
 -- script level --
 ------------------
 
-#modifiers=typeModifier* ( aclass=class | interface=interface )
+#modifiers=typeModifier* ( aclass=class | interface=interface | enumeration=enumeration )
 -> scriptDeclaration ;;
 
 requires=requires | anamespace=namespace | pin=pin | declaration=scriptDeclaration | empty=endOfCommand
@@ -386,6 +386,9 @@ ENUM name=identifier endOfCommand
 -> enumerationBegin ;;
 
 name=identifier ?( ASSIGN value=expression ) endOfCommand
+-> enumerationEntry ;;
+
+entry=enumerationEntry | empty=endOfCommand
 -> enumerationBody ;;
 
 END endOfCommand

@@ -91,7 +91,8 @@ public:
 	 * Internal class context for type or null-context if not found.
 	 * \note DUChainReadLocker required.
 	 */
-	static DUContext *contextForType( const TopDUContext &top, const AbstractType::Ptr &type );
+	static DUContext *contextForType( const TopDUContext &top, const AbstractType::Ptr &type,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * This class declaration for context or nullptr if not found.
@@ -103,7 +104,8 @@ public:
 	 * Super class declaration for context or nullptr if not found.
 	 * \note DUChainReadLocker required.
 	 */
-	static ClassDeclaration *superClassDeclFor( const DUContext &context );
+	static ClassDeclaration *superClassDeclFor( const DUContext &context,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Class declaration for context or nullptr if not found.
@@ -116,28 +118,29 @@ public:
 	 * Class declaration for type or nullptr if not found.
 	 * \note DUChainReadLocker required.
 	 */
-	static ClassDeclaration *classDeclFor( const TopDUContext &top, const AbstractType::Ptr &type );
+	static ClassDeclaration *classDeclFor( const TopDUContext &top, const AbstractType::Ptr &type,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Super class of class declaration or nullptr if not set.
 	 * \note DUChainReadLocker required.
 	 */
 	static ClassDeclaration *superClassOf( const TopDUContext &top,
-		const ClassDeclaration &declaration );
+		const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Implementation classes of class declaration.
 	 * \note DUChainReadLocker required.
 	 */
 	static QVector<ClassDeclaration*> implementsOf( const TopDUContext &top,
-		const ClassDeclaration &declaration );
+		const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * All base classes of class declaration.
 	 * \note DUChainReadLocker required.
 	 */
 	static QVector<ClassDeclaration*> baseClassesOf( const TopDUContext &top,
-		const ClassDeclaration &declaration );
+		const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/** Two type points are the same. */
 	static bool equals( const AbstractType::Ptr &type1, const AbstractType::Ptr &type2 );
@@ -150,7 +153,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 */
 	static bool castable( const TopDUContext &top, const AbstractType::Ptr &type,
-		const AbstractType::Ptr &targetType );
+		const AbstractType::Ptr &targetType, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/** Functions have the same signature. */
 	static bool sameSignature( const FunctionType::Ptr &func1, const FunctionType::Ptr &func2 );
@@ -164,7 +167,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 */
 	static bool overrides( const TopDUContext &top, const ClassFunctionDeclaration *func1,
-		const ClassFunctionDeclaration *func2 );
+		const ClassFunctionDeclaration *func2, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/** Get documentation file for Object class. */
 	static IndexedString getDocumentationFileObject();
@@ -174,28 +177,30 @@ public:
 	 * \note DUChainReadLocker required.
 	 */
 	static Declaration *getInternalTypeDeclaration( const TopDUContext &top,
-		const QualifiedIdentifier &identifier );
+		const QualifiedIdentifier &identifier, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Find first matching declaration.
 	 * \note DUChainReadLocker required.
 	 **/
 	static Declaration *declarationForName( const IndexedIdentifier &identifier,
-		const CursorInRevision& location, const DUContext &context );
+		const CursorInRevision& location, const DUContext &context,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Find first matching declaration in base classes only.
 	 * \note DUChainReadLocker required.
 	 **/
 	static Declaration *declarationForNameInBase( const IndexedIdentifier &identifier,
-		const DUContext &context );
+		const DUContext &context, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Find all matching declarations.
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
-		const CursorInRevision& location, const DUContext &context );
+		const CursorInRevision& location, const DUContext &context,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Find all matching declarations in base classes only.
@@ -227,7 +232,8 @@ public:
 	 * \note DUChainReadLocker required.
 	 */
 	static QVector<ClassFunctionDeclaration*> autoCastableFunctions( const TopDUContext &top,
-		const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations );
+		const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations,
+		const QVector<const TopDUContext*> &reachableContexts );
 };
 
 }

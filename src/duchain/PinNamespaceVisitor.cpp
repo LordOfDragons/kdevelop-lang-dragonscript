@@ -65,7 +65,7 @@ const QVector<IdentifierAst*> nodes, const QVector<QString> &names, int index ){
 // 		names.at( index ), CursorInRevision::invalid() ) );
 	const IndexedIdentifier identifier( Identifier( names.at( index ) ) );
 	QVector<Declaration*> declarations( Helpers::declarationsForName( identifier,
-		CursorInRevision::invalid(), *searchContext ) );
+		CursorInRevision::invalid(), *searchContext, {} ) );
 	
 // 	qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index ) << "found" << declarations;
 	if( declarations.isEmpty() ){

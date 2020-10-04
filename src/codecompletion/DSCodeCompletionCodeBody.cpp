@@ -112,7 +112,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		
 		EditorIntegrator editor( session );
 		DUChainReadLocker lock;
-		ExpressionVisitor exprvisitor( editor, pContext.data() );
+		ExpressionVisitor exprvisitor( editor, pContext.data(), {} );
 		exprvisitor.visitExpression( ast );
 		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
 			qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";

@@ -56,10 +56,13 @@ private:
 	
 	bool pIsTypeName;
 	
+	const QVector<const TopDUContext*> &pReachableContexts;
+	
 	
 	
 public:
-	ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx );
+	ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx,
+		const QVector<const TopDUContext*> &reachableContexts );
 	
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;

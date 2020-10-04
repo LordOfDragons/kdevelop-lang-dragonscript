@@ -44,7 +44,7 @@ public:
 	
 	void visitEnumeration( EnumerationAst *node ) override;
 	void visitEnumerationBegin( EnumerationBeginAst *node ) override;
-	void visitEnumerationBody( EnumerationBodyAst *node ) override;
+	void visitEnumerationEntry( EnumerationEntryAst *node ) override;
 	void visitEnumerationEnd( EnumerationEndAst *node ) override;
 	
 	void visitStatement( StatementAst *node ) override;

@@ -275,7 +275,7 @@ void DebugAst::visitEnumerationBegin( EnumerationBeginAst *node ){
 	qDebug() << pBuffer;
 }
 
-void DebugAst::visitEnumerationBody( EnumerationBodyAst *node ){
+void DebugAst::visitEnumerationEntry( EnumerationEntryAst *node ){
 	pBuffer = pPrefix;
 	pBuffer.append( tokenText( *node->name ) );
 	if( node->value ){

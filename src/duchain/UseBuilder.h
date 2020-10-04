@@ -25,11 +25,13 @@ private:
 	AbstractType::Ptr pCurExprType;
 	bool pEnableErrorReporting;
 	bool pAllowVoidType;
+	const QVector<ReferencedTopDUContext> &pNeighborContexts;
 	
 	
 	
 public:
-	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps );
+	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps,
+		const QVector<ReferencedTopDUContext> &neightborContexts );
 	
 	/** Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }

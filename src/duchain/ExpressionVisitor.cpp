@@ -26,10 +26,12 @@ using namespace KDevelop;
 
 namespace DragonScript {
 
-ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx ) :
+ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator,
+	const DUContext *ctx, const QVector<const TopDUContext*> &reachableContexts ) :
 DynamicLanguageExpressionVisitor( ctx ),
 pEditor( editorIntegrator ),
-pIsTypeName( false )
+pIsTypeName( false ),
+pReachableContexts( reachableContexts )
 {
 	Q_ASSERT( m_context );
 	Q_ASSERT( m_context->topContext() );
@@ -61,16 +63,13 @@ const DUContext *ExpressionVisitor::lastContext() const{
 	}
 	
 	// find context for type. this is a mess and needs trial and error
-	const StructureType::Ptr structType = TypePtr<StructureType>::dynamicCast( m_lastType );
-	if( structType ){
-		DUContext * const ctx = structType->internalContext( topContext() );
-		if( ctx ){
-			return ctx;
-		}
+	DUContext *ctx = Helpers::contextForType( *topContext(), m_lastType, pReachableContexts );
+	if( ctx ){
+		return ctx;
 	}
 	
 	if( m_lastDeclaration ){
-		DUContext * const ctx = m_lastDeclaration->internalContext();
+		ctx = m_lastDeclaration->internalContext();
 		if( ctx ){
 			return ctx;
 		}
@@ -117,7 +116,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		}break;
 		
 	case TokenType::Token_SUPER:{
-		ClassDeclaration * const d = Helpers::superClassDeclFor( *m_context );
+		ClassDeclaration * const d = Helpers::superClassDeclFor( *m_context, pReachableContexts );
 		if( d ){
 			encounterDecl( *d );
 		}
@@ -141,22 +140,9 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	const DUContext *searchContext = m_context;
-	CursorInRevision findNameBefore( pEditor.findPosition( *iter->element, EditorIntegrator::BackEdge ) );
 	bool checkForVoid = pAllowVoid;
 	
 	do{
-		/*
-		CursorInRevision findNameBefore;
-		if( m_scanUntilCursor.isValid() ){
-			findNameBefore = m_scanUntilCursor;
-			
-		}else if( m_forceGlobalSearching ){
-			findNameBefore = CursorInRevision::invalid();
-			
-		}else{
-			findNameBefore = pEditor.findPosition( *iter->element, EditorIntegrator::BackEdge );
-		}*/
-		
 		const QString name( pEditor.tokenText( iter->element->name ) );
 		
 		Declaration *decl = nullptr;
@@ -169,7 +155,8 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 		}else{
 			if( searchContext ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
-				decl = Helpers::declarationForName( identifier, findNameBefore, *searchContext );
+				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
+					*searchContext, pReachableContexts );
 			}
 			
 			if( ! decl ){
@@ -187,7 +174,6 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 		}
 		
 		checkForVoid = false;
-		findNameBefore = CursorInRevision( INT_MAX, INT_MAX );
 		iter = iter->next;
 	}while( iter != end );
 }
@@ -203,7 +189,8 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 	if( pIsTypeName ){
 		// base object is a type so find an inner type
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
-		Declaration * const decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(), *ctx );
+		Declaration * const decl = Helpers::declarationForName( identifier,
+			CursorInRevision::invalid(), *ctx, pReachableContexts );
 		
 		if( decl ){
 			encounterDecl( *decl );
@@ -239,7 +226,8 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		if( ctx ){
 			//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 			declarations = Helpers::declarationsForName( identifier,
-				pEditor.findPosition( *node, EditorIntegrator::BackEdge ), *ctx );
+				pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
+				*ctx, pReachableContexts );
 		}
 		
 		if( declarations.isEmpty() ){
@@ -252,7 +240,8 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 					if( ctx ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
-							pEditor.findPosition( *node, EditorIntegrator::BackEdge ), *ctx );
+							pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
+							*ctx, pReachableContexts );
 					}
 				}
 			}
@@ -501,7 +490,7 @@ void ExpressionVisitor::encounterDecl( Declaration &decl ){
 }
 
 void ExpressionVisitor::encounterInternalType( const QualifiedIdentifier &identifier ){
-	Declaration * const decl = Helpers::getInternalTypeDeclaration( *topContext(), identifier );
+	Declaration * const decl = Helpers::getInternalTypeDeclaration( *topContext(), identifier, pReachableContexts );
 	if( decl ){
 		encounterDecl( *decl );
 		
@@ -526,7 +515,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
 	declarations = Helpers::declarationsForName(
 		IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx );
+		pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, pReachableContexts );
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();
@@ -544,7 +533,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	
 	// find functions matching with auto-casting
 	const QVector<ClassFunctionDeclaration*> possibleFunctions(
-		Helpers::autoCastableFunctions( *topContext(), signature, declarations ) );
+		Helpers::autoCastableFunctions( *topContext(), signature, declarations, pReachableContexts ) );
 	if( ! possibleFunctions.isEmpty() ){
 		useFunction = possibleFunctions.first();
 		if( useFunction ){

@@ -89,6 +89,10 @@ public class OuterClass extends ClassExtendImplement
 		entry2 //<<! doc-comment
 		entry3 //<<!
 		entry4
+		/** this is a comment */
+		
+		entry5
+		entry6
 	end
 	
 	/** doc-comment */
@@ -105,7 +109,8 @@ public class OuterClass extends ClassExtendImplement
 		pMember2 = null
 		var ClassExtendImplement2 v = ClassExtendImplement2.new()
 		
-		this.callThat().pMember2 = OuterClass.new( this.pMember1 > 8 if "String literal" else this.toString(), null )
+		this.callThat().pMember2 = OuterClass.new( this.pMember1 > 8 if "String literal" else this.toString(), not arg2 )
+		OuterClass.isATest( 28, 9 )
 		this.callMe( arg1.toInt() + 2, block int each
 			each.equals( this.pFunc().toString() )
 			return true

@@ -36,7 +36,8 @@ private:
 	
 public:
 	DeclarationBuilder( EditorIntegrator &editor, const ParseSession &parseSession,
-		const QSet<ImportPackage::Ref> &deps, int phase );
+		const QSet<ImportPackage::Ref> &deps,
+		const QVector<ReferencedTopDUContext> &neighborContexts, int phase );
 	~DeclarationBuilder() override;
 	
 	/** Close namespace contexts. */
@@ -64,7 +65,7 @@ public:
     void visitInterfaceBodyDeclaration( InterfaceBodyDeclarationAst *node ) override;
 	void visitInterfaceFunctionDeclare( InterfaceFunctionDeclareAst *node ) override;
 	void visitEnumeration( EnumerationAst *node ) override;
-	void visitEnumerationBody( EnumerationBodyAst *node ) override;
+	void visitEnumerationEntry( EnumerationEntryAst *node ) override;
 	void visitExpressionBlock( ExpressionBlockAst *node ) override;
 	void visitStatementIf( StatementIfAst *node ) override;
 	void visitStatementElif( StatementElifAst *node ) override;

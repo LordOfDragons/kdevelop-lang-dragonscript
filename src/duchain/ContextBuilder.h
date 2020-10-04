@@ -1,6 +1,8 @@
 #ifndef _CONTEXTBUILDER_H
 #define _CONTEXTBUILDER_H
 
+#include <QPair>
+
 #include <language/duchain/builders/abstractcontextbuilder.h>
 #include <language/editor/rangeinrevision.h>
 #include <language/duchain/topducontext.h>
@@ -29,6 +31,7 @@ private:
 	EditorIntegrator *pEditor = nullptr;
 	int pNamespaceContextCount = 0;
 	QSet<ImportPackage::Ref> pDependencies;
+	QVector<const TopDUContext*> pReachableContexts;
 	bool pRequiresRebuild = false;
 	int pReparsePriority = 0;
 	QSet<IndexedString> pWaitForFiles;
@@ -43,6 +46,9 @@ public:
 	
 	inline const QSet<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
 	void setDependencies( const QSet<ImportPackage::Ref> &deps );
+	
+	inline QVector<const TopDUContext*> &reachableContexts(){ return pReachableContexts; }
+	inline const QVector<const TopDUContext*> &reachableContexts() const{ return pReachableContexts; }
 	
 	inline bool requiresRebuild() const{ return pRequiresRebuild; }
 	void setRequiresRebuild( bool failed );

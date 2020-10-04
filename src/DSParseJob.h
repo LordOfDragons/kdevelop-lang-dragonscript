@@ -2,6 +2,7 @@
 #define _PARSEJOB_H_
 
 #include <QSet>
+#include <QVector>
 
 #include <language/backgroundparser/parsejob.h>
 #include <language/duchain/problem.h>
@@ -82,6 +83,7 @@ private:
 	ImportPackage::Ref pPackage;
 	QSet<ImportPackage::Ref> pDependencies;
 	QSet<IndexedString> pProjectFiles;
+	QVector<ReferencedTopDUContext> pNeighborContexts;
 	QStringList pProjectIncludePath;
 	int pReparsePriority;
 	QSet<IndexedString> pWaitForFiles;

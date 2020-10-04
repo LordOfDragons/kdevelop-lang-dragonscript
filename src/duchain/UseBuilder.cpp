@@ -14,19 +14,25 @@
 #include "EditorIntegrator.h"
 #include "ExpressionVisitor.h"
 #include "Helpers.h"
+#include "DumpChain.h"
 
 
 using namespace KDevelop;
 
 namespace DragonScript{
 
-UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps ) :
+UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps,
+	const QVector<ReferencedTopDUContext> &ncs ) :
 pParseSession( *editor.parseSession() ),
 pEnableErrorReporting( true ),
-pAllowVoidType( false )
+pAllowVoidType( false ),
+pNeighborContexts( ncs )
 {
 	setDependencies( deps );
 	setEditor( &editor );
+	foreach( const ReferencedTopDUContext &each, ncs ){
+		reachableContexts() << each.data();
+	}
 }
 
 
@@ -70,7 +76,8 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			if( context ){
 				DUChainReadLocker lock;
 				const IndexedIdentifier identifier( (Identifier( name )) );
-				decl = Helpers::declarationForName( identifier, CursorInRevision( INT_MAX, INT_MAX ), *context );
+				decl = Helpers::declarationForName( identifier,
+					CursorInRevision::invalid(), *context, reachableContexts() );
 				context = nullptr;
 			}
 			
@@ -138,7 +145,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 		superContext = nullptr;
 		
 		if( classDecl ){
-			classDecl = Helpers::superClassOf( top, *classDecl );
+			classDecl = Helpers::superClassOf( top, *classDecl, reachableContexts() );
 			if( classDecl ){
 				superContext = classDecl->internalContext();
 			}
@@ -177,10 +184,11 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	if( ! useFunction ){
 		// find functions matching with auto-casting
 		const QVector<ClassFunctionDeclaration*> possibleFunctions(
-			Helpers::autoCastableFunctions( top, signature, declarations ) );
+			Helpers::autoCastableFunctions( top, signature, declarations, reachableContexts() ) );
 		
 		if( possibleFunctions.size() == 1 ){
 			useFunction = possibleFunctions.at( 0 );
+			lock.unlock();
 			
 		}else if( possibleFunctions.size() > 1 ){
 			useFunction = possibleFunctions.at( 0 );
@@ -223,6 +231,9 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 				reportSemanticError( useRange,
 					i18n( "Ambiguous constructor call: found %1", sig ), diagnostics );
 			}
+			
+		}else{
+			lock.unlock();
 		}
 		
 	}else{
@@ -276,7 +287,7 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprValue( *editor(), context );
+	ExpressionVisitor exprValue( *editor(), context, reachableContexts() );
 	exprValue.visitNode( node );
 	declaration = exprValue.lastDeclaration();
 	type = exprValue.lastType();
@@ -328,9 +339,14 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		QVector<Declaration*> declarations;
 		DUChainReadLocker lock;
 		if( context ){
-			declarations = Helpers::declarationsForName(
-				identifier, editor()->findPosition( *node ), *context );
+			declarations = Helpers::declarationsForName( identifier,
+				editor()->findPosition( *node ), *context, reachableContexts() );
 		}
+			if(editor()->tokenText(*node->name)=="pClass"){
+				qDebug() << "TYPE TYPE" << (!declarations.isEmpty() ? declarations.first()->toString() : "?")
+					<< "context" << (context ? context->localScopeIdentifier().toString() : "?")
+					<< "pClass" << (context && context->parentContext() ? context->parentContext()->localScopeIdentifier().toString() : "?");
+			}
 		
 		if( declarations.isEmpty() ){
 			// if the context is not a class context we are at the beginning of an expression
@@ -342,8 +358,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 				}
 				
 				if( context ){
-					declarations = Helpers::declarationsForName(
-						identifier, editor()->findPosition( *node ), *context );
+					declarations = Helpers::declarationsForName( identifier,
+						editor()->findPosition( *node ), *context, reachableContexts() );
 				}
 			}
 		}
@@ -391,15 +407,9 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		//UseBuilderBase::newUse( node->name, useRange, DeclarationPointer( declaration ) );
 		UseBuilderBase::newUse( useRange, DeclarationPointer( declaration ) );
 		
-		const StructureType::Ptr structType( declaration->type<StructureType>() );
-		if( structType ){
-			lock.lock();
-			pCurExprContext = structType->internalContext( topContext() );
-			
-		}else{
-			pCurExprContext = nullptr;
-		}
+		lock.lock();
 		pCurExprType = declaration->abstractType();
+		pCurExprContext = Helpers::contextForType( *topContext(), pCurExprType, reachableContexts() );
 	}
 }
 
@@ -407,7 +417,8 @@ void UseBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 	UseBuilderBase::visitExpressionBlock( node );
 	
 	DUChainReadLocker lock;
-	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBlock() );
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
+		*topContext(), Helpers::getTypeBlock(), reachableContexts() );
 	if( typeDecl && typeDecl->abstractType() ){
 		pCurExprContext = typeDecl->internalContext();
 		pCurExprType = typeDecl->abstractType();
@@ -443,6 +454,7 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 		return;
 	}
 	
+	const AbstractType::Ptr typeLeft( pCurExprType ? pCurExprType : Helpers::getTypeInvalid() );
 	const KDevPG::ListNode<ExpressionAssignMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionAssignMoreAst*> *end = iter;
 	const TopDUContext &top = *topContext();
@@ -453,23 +465,19 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 			isAssign = pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_ASSIGN;
 		}
 		
+		const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+		
 		if( isAssign ){
-			const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
-			const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
-			
 			DUChainReadLocker lock;
-			if( ! Helpers::castable( top, typeRight, typeLeft ) ){
+			if( ! Helpers::castable( top, typeRight, typeLeft, reachableContexts() ) ){
 				lock.unlock();
 				reportSemanticError( editor()->findRange( *iter->element->op ),
 					i18n( "Cannot assign object of type %1 to %2",
 					typeRight ? typeRight->toString() : "??", typeLeft ? typeLeft->toString() : "??" ) );
-				lock.lock();
 			}
 			
-			contextLeft = Helpers::contextForType( top, typeLeft );
-			
 		}else{
-			checkFunctionCall( iter->element->op, contextLeft, typeOfNode( iter->element->right, context ) );
+			checkFunctionCall( iter->element->op, contextLeft, typeRight );
 			contextLeft = pCurExprContext;
 		}
 		
@@ -502,6 +510,7 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 		return;
 	}
 	
+	const AbstractType::Ptr typeLeft( pCurExprType ? pCurExprType : Helpers::getTypeInvalid() );
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *end = iter;
 	const TopDUContext &top = *topContext();
@@ -517,12 +526,11 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 			}
 		}
 		
+		const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+		
 		if( isEquals ){
-			const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
-			const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
-			
 			DUChainReadLocker lock;
-			if( ! Helpers::castable( top, typeRight, typeLeft ) ){
+			if( ! Helpers::castable( top, typeRight, typeLeft, reachableContexts() ) ){
 				lock.unlock();
 				reportSemanticError( editor()->findRange( *iter->element->op ),
 					i18n( "Cannot compare object of type %1 with %2",
@@ -530,7 +538,8 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 				lock.lock();
 			}
 			
-			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
+			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
+				*topContext(), Helpers::getTypeBool(), reachableContexts() );
 			if( typeDecl && typeDecl->abstractType() ){
 				pCurExprType = typeDecl->abstractType();
 				pCurExprContext = typeDecl->internalContext();
@@ -542,7 +551,7 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 			contextLeft = pCurExprContext;
 			
 		}else{
-			checkFunctionCall( iter->element->op, contextLeft, typeOfNode( iter->element->right, context ) );
+			checkFunctionCall( iter->element->op, contextLeft, typeRight );
 			contextLeft = pCurExprContext;
 		}
 		
@@ -552,6 +561,7 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 
 void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	AbstractType::Ptr typeExpr( typeOfNode( node->left, context ) );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -561,38 +571,39 @@ void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 	const KDevPG::ListNode<ExpressionLogicMoreAst*> *end = iter;
 	const TopDUContext &top = *topContext();
 	
-	DUChainReadLocker lock;
-	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
 	AbstractType::Ptr typeBool;
+	{
+	DUChainReadLocker lock;
+	Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
+		*topContext(), Helpers::getTypeBool(), reachableContexts() );
 	if( typeDecl ){
 		typeBool = typeDecl->abstractType();
 	}
 	
-	do{
+	if( ! Helpers::castable( top, typeExpr, typeBool, reachableContexts() ) ){
 		lock.unlock();
-		const AbstractType::Ptr typeLeft( typeOfNode( node->left, context ) );
-		const AbstractType::Ptr typeRight( typeOfNode( iter->element->right, context ) );
+		reportSemanticError( editor()->findRange( *iter->element->op ),
+			i18n( "Type %1 is not bool", typeExpr ? typeExpr->toString() : "??" ) );
+	}
+	}
+	
+	do{
+		typeExpr = typeOfNode( iter->element->right, context );
 		
-		lock.lock();
-		if( ! Helpers::castable( top, typeLeft, typeBool ) ){
+		{
+		DUChainReadLocker lock;
+		if( ! Helpers::castable( top, typeExpr, typeBool, reachableContexts() ) ){
 			lock.unlock();
 			reportSemanticError( editor()->findRange( *iter->element->op ),
-				i18n( "Left side type %1 is not bool", typeLeft ? typeLeft->toString() : "??" ) );
-			lock.lock();
+				i18n( "Type %1 not bool", typeExpr ? typeExpr->toString() : "??" ) );
 		}
-		
-		if( ! Helpers::castable( top, typeRight, typeBool ) ){
-			lock.unlock();
-			reportSemanticError( editor()->findRange( *iter->element->op ),
-				i18n( "Right side type %1 not bool", typeRight ? typeRight->toString() : "??" ) );
-			lock.lock();
 		}
-		
-		pCurExprType = typeBool;
-		pCurExprContext = Helpers::contextForType( top, typeBool );
 		
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCurExprType = typeBool;
+	pCurExprContext = Helpers::contextForType( top, typeBool, reachableContexts() );
 }
 
 void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
@@ -655,7 +666,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
 				if( context ){
 					DUChainReadLocker lock;
-					ExpressionVisitor exprValue( *editor(), context );
+					ExpressionVisitor exprValue( *editor(), context, reachableContexts() );
 					exprValue.visitNode( iter->element->type );
 					const DeclarationPointer declaration( exprValue.lastDeclaration() );
 					if( declaration ){
@@ -669,7 +680,8 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 				
 			}else{
 				DUChainReadLocker lock;
-				Declaration * const typeDecl = Helpers::getInternalTypeDeclaration( *topContext(), Helpers::getTypeBool() );
+				Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
+					*topContext(), Helpers::getTypeBool(), reachableContexts() );
 				if( typeDecl && typeDecl->abstractType() ){
 					pCurExprContext = typeDecl->internalContext();
 					pCurExprType = typeDecl->abstractType();
@@ -693,6 +705,8 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 		return;
 	}
 	
+	AbstractType::Ptr typeRight( pCurExprType );
+	
 	QVector<ExpressionUnaryOpAst*> sequence;
 	const KDevPG::ListNode<ExpressionUnaryOpAst*> *iter = node->opSequence->front();
 	const KDevPG::ListNode<ExpressionUnaryOpAst*> *end = iter;
@@ -702,8 +716,28 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 	}while( iter != end );
 	
 	foreach( ExpressionUnaryOpAst *each, sequence ){
-		checkFunctionCall( each, contextRight, QVector<AbstractType::Ptr>() );
-		contextRight = pCurExprContext;
+		if( pParseSession.tokenStream()->at( each->op ).kind == TokenType::Token_LOGICAL_NOT ){
+			AbstractType::Ptr typeBool;
+			{
+			DUChainReadLocker lock;
+			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
+				*topContext(), Helpers::getTypeBool(), reachableContexts() );
+			if( typeDecl ){
+				typeBool = typeDecl->abstractType();
+				contextRight = typeDecl->internalContext();
+			}
+			
+			if( ! Helpers::castable( *topContext(), typeRight, typeBool, reachableContexts() ) ){
+				lock.unlock();
+				reportSemanticError( editor()->findRange( each->op ),
+					i18n( "Type %1 is not bool", typeRight ? typeRight->toString() : "??" ) );
+			}
+			}
+			
+		}else{
+			checkFunctionCall( each, contextRight, QVector<AbstractType::Ptr>() );
+			contextRight = pCurExprContext;
+		}
 	}
 }
 
@@ -719,24 +753,29 @@ void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
 	AbstractType::Ptr typeElse( typeOfNode( node->more->expressionElse, context ) );
 	const TopDUContext &top = *topContext();
 	
+	bool validCondition = true, validCast = true;
+	{
 	DUChainReadLocker lock;
-	if( ! Helpers::equalsInternal( typeCondition, Helpers::getTypeBool() ) ){
-		lock.unlock();
-		reportSemanticError( editor()->findRange( *node->condition ),
-			i18n( "Cannot assign object of type %1 to bool", typeCondition ? typeCondition->toString() : "??" ) );
-		lock.lock();
+	
+	validCondition = Helpers::equalsInternal( typeCondition, Helpers::getTypeBool() );
+	
+	if( node->more->expressionIf && node->more->expressionElse ){
+		validCast = Helpers::castable( top, typeElse, typeIf, reachableContexts() );
 	}
 	
-	if( node->more->expressionIf && node->more->expressionElse && ! Helpers::castable( top, typeElse, typeIf ) ){
-		lock.unlock();
+	pCurExprContext = Helpers::contextForType( top, typeIf, reachableContexts() );
+	pCurExprType = typeIf;
+	}
+	
+	if( ! validCondition ){
+		reportSemanticError( editor()->findRange( *node->condition ),
+			i18n( "Cannot assign object of type %1 to bool", typeCondition ? typeCondition->toString() : "??" ) );
+	}
+	if( ! validCast ){
 		reportSemanticError( editor()->findRange( *node->more->expressionElse ),
 			i18n( "Cannot assign object of type %1 to %2",
 			typeElse ? typeElse->toString() : "??", typeIf ? typeIf->toString() : "??" ) );
-		lock.lock();
 	}
-	
-	pCurExprContext = Helpers::contextForType( top, typeIf );
-	pCurExprType = typeIf;
 }
 
 void UseBuilder::visitStatementFor( StatementForAst *node ){
@@ -768,17 +807,15 @@ DUContext *UseBuilder::functionGetContext( AstNode *node, DUContext *context ){
 }
 
 AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUContext *context ){
-	if( node ){
-		pCurExprContext = context;
-		pCurExprType = nullptr;
-		visitNode( node );
+	if( ! node ){
+		return Helpers::getTypeInvalid();
 	}
 	
-	AbstractType::Ptr type( pCurExprType );
-	if( ! type ){
-		type = Helpers::getTypeInvalid();
-	}
-	return type;
+	pCurExprContext = context;
+	pCurExprType = nullptr;
+	visitNode( node );
+	
+	return pCurExprType ? pCurExprType : Helpers::getTypeInvalid();
 }
 
 void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const AbstractType::Ptr &argument ){
@@ -794,7 +831,8 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 	QVector<Declaration*> declarations;
 	if( context ){
 		DUChainReadLocker lock;
-		declarations = Helpers::declarationsForName( identifier, editor()->findPosition( *node ), *context );
+		declarations = Helpers::declarationsForName( identifier,
+			CursorInRevision::invalid(), *context, reachableContexts() );
 	}
 	
 	if( declarations.isEmpty() ){
@@ -809,6 +847,10 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 		}else{
 			reportSemanticError( useRange, i18n( "Unknown function: %1",
 				identifier.identifier().toString() ) );
+			
+			if( identifier.identifier().toString() == "equals" ){
+				DumpChain().dump( context );
+			}
 		}
 		
 		pCurExprContext = nullptr;
@@ -844,7 +886,7 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 	if( ! useFunction ){
 		// find functions matching with auto-casting
 		const QVector<ClassFunctionDeclaration*> possibleFunctions(
-			Helpers::autoCastableFunctions( top, signature, declarations ) );
+			Helpers::autoCastableFunctions( top, signature, declarations, reachableContexts() ) );
 		
 		if( possibleFunctions.size() == 1 ){
 			useFunction = possibleFunctions.at( 0 );
@@ -898,13 +940,11 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 		//UseBuilderBase::newUse( node, useRange, DeclarationPointer( useFunction ) );
 		UseBuilderBase::newUse( useRange, DeclarationPointer( useFunction ) );
 		
-		const StructureType::Ptr structType = TypePtr<StructureType>::dynamicCast(
-			useFunction->type<FunctionType>()->returnType() );
-		if( structType ){
-			lock.lock();
-			pCurExprContext = structType->internalContext( &top );
-		}
 		pCurExprType = useFunction->type<FunctionType>()->returnType();
+		if( pCurExprType ){
+			lock.lock();
+			pCurExprContext = Helpers::contextForType( top, pCurExprType, reachableContexts() );
+		}
 		return;
 	}
 	

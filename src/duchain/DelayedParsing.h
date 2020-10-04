@@ -137,6 +137,11 @@ public:
 	void cancelWaiting( const IndexedString &file );
 	
 	/**
+	 * Returns true if \em file is waiting for other files.
+	 */
+	bool isWaiting( const IndexedString &file );
+	
+	/**
 	 * Notify waiters that \em file finished parsing.
 	 */
 	void parsingFinished( const IndexedString &file );

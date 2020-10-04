@@ -89,8 +89,8 @@ public class OuterClass extends ClassExtendImplement
 		entry2 //<<! doc-comment
 		entry3 //<<!
 		entry4
-		/** this is a comment */
 		
+		/** this is a comment */
 		entry5
 		entry6
 	end

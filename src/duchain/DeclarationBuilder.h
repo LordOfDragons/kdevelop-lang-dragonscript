@@ -28,7 +28,7 @@ class KDEVDSDUCHAIN_EXPORT DeclarationBuilder : public DeclarationBuilderBase{
 
 private:
 	const ParseSession &pParseSession;
-	QList<bool> pNamespaceContexts;
+	int pNamespaceContextCount;
 	int pPhase;
 	int pLastModifiers;
 	

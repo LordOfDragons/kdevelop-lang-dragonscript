@@ -211,4 +211,9 @@ fixed class int
 	public func int --()
 		return 0
 	end
+	
+	/** \brief Negated value. */
+	public func int -()
+		return 0
+	end
 end

@@ -26,6 +26,7 @@ DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor,
 	const QVector<ReferencedTopDUContext> &ncs, int phase ) :
 DeclarationBuilderBase(),
 pParseSession( parseSession ),
+pNamespaceContextCount( 0 ),
 pPhase( phase )
 {
 	setDependencies( deps );
@@ -39,15 +40,11 @@ DeclarationBuilder::~DeclarationBuilder(){
 }
 
 void DeclarationBuilder::closeNamespaceContexts(){
-	// for each namespace component add a context
-	while( ! pNamespaceContexts.isEmpty() ){
-		if( pNamespaceContexts.last() ){
-			closeContext();
-			//m_currentClassTypes.removeLast();
-			closeType();
-		}
+	while( pNamespaceContextCount > 0 ){
+		closeContext();
+		closeType();
 		closeDeclaration();
-		pNamespaceContexts.removeLast();
+		pNamespaceContextCount--;
 	}
 }
 
@@ -176,8 +173,7 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		}
 		
 		iter = iter->next;
-// 		qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace push back" << newDecl;
-		pNamespaceContexts.push_back( true );
+		pNamespaceContextCount++;
 		
 	}while( iter != end );
 }
@@ -641,7 +637,7 @@ void DeclarationBuilder::visitEnumerationEntry( EnumerationEntryAst *node ){
 void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 	// NOTE called only if pPhase > 1
 	
-	openContext( node, DUContext::Other, QualifiedIdentifier( "{block}" ) );
+	openContext( node, DUContext::Other ); //, QualifiedIdentifier( "{block}" ) );
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ExpressionBlockArgumentAst*> *iter = node->begin->argumentsSequence->front();
@@ -677,10 +673,12 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 	visitNode( node->condition );
 	
 	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{if}" ) );
-		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
+		
+		openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+			//, QualifiedIdentifier( "{if}" ) );
+		
 		do{
 			visitNode( iter->element );
 			iter = iter->next;
@@ -700,18 +698,22 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 	}
 	
 	// else
-	if( node->elseSequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{else}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->elseSequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->elseSequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{else}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
@@ -719,18 +721,22 @@ void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
 	
 	visitNode( node->condition );
 	
-	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{elif}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->bodySequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{elif}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
@@ -749,18 +755,22 @@ void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
 	}
 	
 	// else
-	if( node->elseSequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{else}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->elseSequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->elseSequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->elseSequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{switch-else}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
@@ -775,18 +785,22 @@ void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
 		}while( iter != end );
 	}
 	
-	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{case}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->bodySequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{case}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
@@ -798,18 +812,22 @@ void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
 	visitNode( node->downto );
 	visitNode( node->step );
 	
-	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{for}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->bodySequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{for}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
@@ -817,28 +835,35 @@ void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
 	
 	visitNode( node->condition );
 	
-	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{while}" ) );
-		
-		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
-		const KDevPG::ListNode<StatementAst*> *end = iter;
-		do{
-			visitNode( iter->element );
-			iter = iter->next;
-		}while( iter != end );
-		
-		closeContext();
+	if( ! node->bodySequence ){
+		return;
 	}
+	
+	const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
+	const KDevPG::ListNode<StatementAst*> *end = iter;
+	
+	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+		//, QualifiedIdentifier( "{while}" ) );
+	
+	do{
+		visitNode( iter->element );
+		iter = iter->next;
+	}while( iter != end );
+	
+	closeContext();
 }
 
 void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 	// NOTE called only if pPhase > 1
 	
 	if( node->bodySequence ){
-		openContext( node, DUContext::Other, QualifiedIdentifier( "{try}" ) );
-		
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
+		
+		openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+			//, QualifiedIdentifier( "{try}" ) );
+		
+		iter = node->bodySequence->front();
 		do{
 			visitNode( iter->element );
 			iter = iter->next;
@@ -860,7 +885,7 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 	// NOTE called only if pPhase > 1
 	
-	openContext( node, DUContext::Other, QualifiedIdentifier( "{catch}" ) );
+	openContext( node, DUContext::Other ); //, QualifiedIdentifier( "{catch}" ) );
 	
 	if( node->variable ){
 		AbstractType::Ptr type;

@@ -12,6 +12,7 @@
 #include <interfaces/ipartcontroller.h>
 
 #include "ImportPackage.h"
+#include "DelayedParsing.h"
 #include "../DSParseJob.h"
 
 
@@ -63,6 +64,22 @@ void ImportPackage::contexts( State &state ){
 // 				qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase" << phase << ":" << file;
 				if( bp.isQueued( file ) ){
 					state.reparsePriority = qMax( state.reparsePriority, bp.priorityForDocument( file ) );
+					
+				}else if( ! DelayedParsing::self().isWaiting( file ) ){
+					// not in the right state and neither pending to be parsed nor waiting for
+					// other files. kick the job in the buts to get running again
+					if( pDebug ){
+						qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase"
+							<< phase << "and is not pending nor waiting (resheduling):" << file;
+					}
+					const int features = context->features()
+						| TopDUContext::VisibleDeclarationsAndContexts
+						| DSParseJob::Resheduled
+						| DSParseJob::phaseFlags( phase + 1 );
+					
+					ICore::self()->languageController()->backgroundParser()->addDocument( file,
+						static_cast<TopDUContext::Features>( features ), 0, nullptr,
+						ParseJob::IgnoresSequentialProcessing, 10 );
 				}
 				state.waitForFiles << file;
 				state.ready = false;

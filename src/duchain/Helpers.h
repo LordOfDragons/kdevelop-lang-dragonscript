@@ -184,7 +184,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 **/
 	static Declaration *declarationForName( const IndexedIdentifier &identifier,
-		const CursorInRevision& location, const DUContext &context,
+		const CursorInRevision& location, const DUContext &context, bool useReachable,
 		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
@@ -199,7 +199,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
-		const CursorInRevision& location, const DUContext &context,
+		const CursorInRevision& location, const DUContext &context, bool useReachable,
 		const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
@@ -207,7 +207,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<Declaration*> declarationsForNameInBase( const IndexedIdentifier &identifier,
-		const DUContext &context );
+		const DUContext &context, const QVector<const TopDUContext*> &reachableContexts );
 	
 	/**
 	 * Find all constructor declarations in class.

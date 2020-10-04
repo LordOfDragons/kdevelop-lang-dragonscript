@@ -141,6 +141,7 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	const DUContext *searchContext = m_context;
 	bool checkForVoid = pAllowVoid;
+	bool useReachable = true;
 	
 	do{
 		const QString name( pEditor.tokenText( iter->element->name ) );
@@ -156,7 +157,7 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 			if( searchContext ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
-					*searchContext, pReachableContexts );
+					*searchContext, useReachable, pReachableContexts );
 			}
 			
 			if( ! decl ){
@@ -174,6 +175,7 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 		}
 		
 		checkForVoid = false;
+		useReachable = false;
 		iter = iter->next;
 	}while( iter != end );
 }
@@ -190,7 +192,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		// base object is a type so find an inner type
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		Declaration * const decl = Helpers::declarationForName( identifier,
-			CursorInRevision::invalid(), *ctx, pReachableContexts );
+			pEditor.findPosition( *node->name ), *ctx, true, pReachableContexts );
 		
 		if( decl ){
 			encounterDecl( *decl );
@@ -224,10 +226,9 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		QVector<Declaration*> declarations;
 		if( ctx ){
-			//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 			declarations = Helpers::declarationsForName( identifier,
 				pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-				*ctx, pReachableContexts );
+				*ctx, false, pReachableContexts );
 		}
 		
 		if( declarations.isEmpty() ){
@@ -241,7 +242,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
 							pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-							*ctx, pReachableContexts );
+							*ctx, true, pReachableContexts );
 					}
 				}
 			}
@@ -513,9 +514,8 @@ const QVector<AbstractType::Ptr> &signature ){
 	QVector<Declaration*> declarations;
 	
 	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
-	declarations = Helpers::declarationsForName(
-		IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, pReachableContexts );
+	declarations = Helpers::declarationsForName( IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
+		pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, false, pReachableContexts );
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();

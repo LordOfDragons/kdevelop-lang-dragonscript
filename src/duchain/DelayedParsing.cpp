@@ -92,6 +92,19 @@ void DelayedParsing::cancelWaiting( const IndexedString &file ){
 	}
 }
 
+bool DelayedParsing::isWaiting( const IndexedString &file ){
+	QMutexLocker lock( &pMutex );
+	
+	DependencyMap::const_iterator iter;
+	for( iter = pDependencyMap.cbegin(); iter != pDependencyMap.cend(); iter++ ){
+		if( iter.value().contains( file ) ){
+			return true;
+		}
+	}
+	
+	return false;
+}
+
 void DelayedParsing::parsingFinished( const IndexedString &file ){
 	QMutexLocker lock( &pMutex );
 	

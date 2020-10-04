@@ -83,6 +83,37 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	}
 // 	qDebug() << "DSParseJob.run: start phase" << pPhase << "for" << document();
 	
+	// features set if user forces a reload of the file:
+	// - SimplifiedVisibleDeclarationsAndContexts
+	// - VisibleDeclarationsAndContexts
+	// - AllDeclarationsAndContexts
+	// - AllDeclarationsContextsAndUses
+	// - ForceUpdate
+	// 
+	// not set:
+	// - AST
+	// - Recursive
+	// - ForceUpdateRecursive
+	// - all custom flags
+	// 
+	// priority is best priority
+	// 
+	// while loading the duchain no parsing seems to happen. for this reason we use the absence
+	// of all custom flags and the presence of ForceUpdate as signal to start fresh
+// 	qDebug() << "DSParseJob: RUN flags=" << minimumFeatures() << "phase"
+// 		<< phaseFromFlags(minimumFeatures()) << "priority" << parsePriority() << "for" << document();
+// 	if( minimumFeatures() & ( TopDUContext::ForceUpdate )
+// 	&& ! ( minimumFeatures() & ( Resheduled | Phase1 | Phase2 | Phase3 ) ) ){
+// 		// force phase to 1 
+// 	}
+	
+	// ForceUpdate seems to be present in scheduled reparsing although the flag is not set.
+	// seems to be added automatically. we can not use it thus for anything. Instead check
+	// if Resheduled flag and phase flags are missing. 
+// 	if( minimumFeatures() & TopDUContext::ForceUpdate ){
+// 		return 1;
+// 	}
+	
 	// parse document
 	ParseSession session( document(), contents().contents );
 	//session.setDebug( true );
@@ -332,6 +363,15 @@ bool DSParseJob::allFilesRequiredPhase(){
 			
 			if( bp.isQueued( file ) ){
 				pReparsePriority = qMax( pReparsePriority, bp.priorityForDocument( file ) );
+				
+			}else if( ! DelayedParsing::self().isWaiting( file ) ){
+				const int features = TopDUContext::VisibleDeclarationsAndContexts
+					| DSParseJob::Resheduled
+					| DSParseJob::phaseFlags( 1 );
+				
+				ICore::self()->languageController()->backgroundParser()->addDocument( file,
+					static_cast<TopDUContext::Features>( features ), 0, nullptr,
+					ParseJob::IgnoresSequentialProcessing, 10 );
 			}
 			pWaitForFiles << file;
 			allPassed = false;
@@ -346,6 +386,18 @@ bool DSParseJob::allFilesRequiredPhase(){
 			
 			if( bp.isQueued( file ) ){
 				pReparsePriority = qMax( pReparsePriority, bp.priorityForDocument( file ) );
+				
+			}else if( ! DelayedParsing::self().isWaiting( file ) ){
+				// not in the right state and neither pending to be parsed nor waiting for
+				// other files. kick the job in the buts to get running again
+				const int features = context->features()
+					| TopDUContext::VisibleDeclarationsAndContexts
+					| DSParseJob::Resheduled
+					| DSParseJob::phaseFlags( phase + 1 );
+				
+				ICore::self()->languageController()->backgroundParser()->addDocument( file,
+					static_cast<TopDUContext::Features>( features ), 0, nullptr,
+					ParseJob::IgnoresSequentialProcessing, 10 );
 			}
 			pWaitForFiles << file;
 			allPassed = false;

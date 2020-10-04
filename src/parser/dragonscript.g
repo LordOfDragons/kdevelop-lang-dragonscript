@@ -476,13 +476,15 @@ name=identifier ?( ASSIGN value=expression )
 -- left:              <<, >>, &, |, ^
 -- left:              +, -
 -- left:              *, /, %
--- non-associative:   cast <type>, castable <type>, typeof <type>
 -- left:              postfix ++, postfix --
 -- right:             prefix ++, prefix --, prefix -, prefix ~ (bitwise negate), not (logical not)
+-- non-associative:   cast <type>, castable <type>, typeof <type>
 -- left:              . (class member)
 
 expression=expressionAssign
 -> expression ;;
+
+
 
 left=expressionInlineIfElse #more=expressionAssignMore*
 -> expressionAssign ;;
@@ -495,11 +497,15 @@ op=ASSIGN | op=ASSIGN_MULTIPLY | op=ASSIGN_DIVIDE | op=ASSIGN_MODULUS
 	| op=ASSIGN_SHIFT_RIGHT | op=ASSIGN_AND | op=ASSIGN_OR | Op=ASSIGN_XOR
 -> expressionAssignOp ;;
 
+
+
 condition=expressionLogic ?more=expressionInlineIfElseMore
 -> expressionInlineIfElse ;;
 
 IF expressionIf=expressionLogic ELSE expressionElse=expressionLogic
 -> expressionInlineIfElseMore ;;
+
+
 
 left=expressionCompare #more=expressionLogicMore*
 -> expressionLogic ;;
@@ -510,6 +516,8 @@ op=expressionLogicOp right=expressionCompare
 op=LOGICAL_AND | op=LOGICAL_OR
 -> expressionLogicOp ;;
 
+
+
 left=expressionBitOperation #more=expressionCompareMore*
 -> expressionCompare ;;
 
@@ -518,6 +526,8 @@ op=expressionCompareOp right=expressionBitOperation
 
 op=LESS | op=GREATER | op=LEQUAL | op=GEQUAL | op=EQUALS | op=NEQUALS
 -> expressionCompareOp ;;
+
+
 
 left=expressionAddition #more=expressionBitOperationMore*
 -> expressionBitOperation ;;
@@ -528,6 +538,8 @@ op=expressionBitOperationOp right=expressionAddition
 op=SHIFT_LEFT | op=SHIFT_RIGHT | op=AND | op=OR | op=XOR
 -> expressionBitOperationOp ;;
 
+
+
 left=expressionMultiply #more=expressionAdditionMore*
 -> expressionAddition ;;
 
@@ -537,16 +549,36 @@ op=expressionAdditionOp right=expressionMultiply
 op=ADD | op=SUBTRACT
 -> expressionAdditionOp ;;
 
-left=expressionSpecial #more=expressionMultiplyMore*
+
+
+left=expressionPostfix #more=expressionMultiplyMore*
 -> expressionMultiply ;;
 
-op=expressionMultiplyOp right=expressionSpecial
+op=expressionMultiplyOp right=expressionPostfix
 -> expressionMultiplyMore ;;
 
 op=MULTIPLY | op=DIVIDE | op=MODULUS
 -> expressionMultiplyOp ;;
 
-left=expressionPostfix #more=expressionSpecialMore*
+
+
+left=expressionUnary #op=expressionPostfixOp*
+-> expressionPostfix ;;
+
+op=INCREMENT | op=DECREMENT
+-> expressionPostfixOp ;;
+
+
+
+#op=expressionUnaryOp* right=expressionSpecial
+-> expressionUnary ;;
+
+op=INCREMENT | op=DECREMENT | op=SUBTRACT | op=INVERSE | op=LOGICAL_NOT
+-> expressionUnaryOp ;;
+
+
+
+left=expressionObject #more=expressionSpecialMore*
 -> expressionSpecial ;;
 
 op=expressionSpecialOp type=fullyQualifiedClassname
@@ -555,17 +587,7 @@ op=expressionSpecialOp type=fullyQualifiedClassname
 op=CAST | op=CASTABLE | op=TYPEOF
 -> expressionSpecialOp ;;
 
-left=expressionUnary #op=expressionPostfixOp*
--> expressionPostfix ;;
 
-op=INCREMENT | op=DECREMENT
--> expressionPostfixOp ;;
-
-#op=expressionUnaryOp* right=expressionObject
--> expressionUnary ;;
-
-op=INCREMENT | op=DECREMENT | op=SUBTRACT | op=INVERSE | op=LOGICAL_NOT
--> expressionUnaryOp ;;
 
 object=expressionBaseObject ( PERIOD #member=expressionMember )*
 -> expressionObject ;;

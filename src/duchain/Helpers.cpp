@@ -171,6 +171,11 @@ const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachab
 }
 
 bool Helpers::equals( const AbstractType::Ptr &type1, const AbstractType::Ptr &type2 ){
+	// NOTE pTypeInvalid is considered a wildcard to reduce errors shown to meaningful ones
+	if( type1 == pTypeInvalid || type2 == pTypeInvalid ){
+		return true;
+	}
+	
 	return type1 && type2 && type1->equals( type2.data() );
 }
 
@@ -189,9 +194,16 @@ bool Helpers::equalsInternal( const AbstractType::Ptr &type, const QualifiedIden
 
 bool Helpers::castable( const TopDUContext &top, const AbstractType::Ptr &type,
 const AbstractType::Ptr &targetType, const QVector<const TopDUContext*> &reachableContexts ){
-	if( ! type || ! targetType ){
-		return false;
+	// NOTE pTypeInvalid is considered a wildcard to reduce errors shown to meaningful ones
+	if( type == pTypeInvalid || targetType == pTypeInvalid ){
+		return true;
 	}
+	
+	// NOTE missing types are wildcards too to reduce errors shown to meaningful ones
+	if( ! type || ! targetType ){
+		return true;
+	}
+	
 	if( type->equals( targetType.data() ) ){
 		return true;
 	}
@@ -305,36 +317,43 @@ const QualifiedIdentifier &identifier, const QVector<const TopDUContext*> &reach
 
 
 Declaration *Helpers::declarationForName( const IndexedIdentifier &identifier,
-const CursorInRevision &location, const DUContext &context,
+const CursorInRevision &location, const DUContext &context, bool useReachable,
 const QVector<const TopDUContext*> &reachableContexts ){
 	QList<Declaration*> declarations;
 	
 	// find declaration in local context up to location
-	declarations = context.findLocalDeclarations( identifier, location );
-	if( ! declarations.isEmpty() ){
-		return declarations.last();
-	}
+// 	declarations = context.findLocalDeclarations( identifier, location );
+// 	if( ! declarations.isEmpty() ){
+// 		return declarations.last();
+// 	}
 	
 	// find declaration in this context, base class and up the parent chain. this finds
 	// also definitions in the local scope beyond the location. both checks are required
 	// with the location based local version first to avoid a later definition hiding a
 	// local one instead of vice versa
-	declarations = context.findDeclarations( identifier );
+	declarations = context.findDeclarations( identifier, location );
 	if( ! declarations.isEmpty() ){
 		return declarations.last();
 	}
 	
-	// find declaraion in base context
-	Declaration * const foundDeclaration = declarationForNameInBase( identifier, context, reachableContexts );
-	if( foundDeclaration ){
-		return foundDeclaration;
+	// find declarations in base context. for this to work properly we to first find the
+	// closest class declaration up the parent chain
+	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
+	if( classDecl && classDecl->internalContext() ){
+		Declaration * const foundDeclaration = declarationForNameInBase(
+			identifier, *classDecl->internalContext(), reachableContexts );
+		if( foundDeclaration ){
+			return foundDeclaration;
+		}
 	}
 	
 	// find declaration in neighbor and pinned contexts
-	for( const DUContext *reachable : reachableContexts ){
-		declarations = reachable->findDeclarations( identifier );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
+	if( useReachable ){
+		for( const DUContext *reachable : reachableContexts ){
+			declarations = reachable->findDeclarations( identifier );
+			if( ! declarations.isEmpty() ){
+				return declarations.last();
+			}
 		}
 	}
 	
@@ -377,33 +396,40 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 
 
 QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
-const CursorInRevision &location, const DUContext &context,
+const CursorInRevision &location, const DUContext &context, bool useReachable,
 const QVector<const TopDUContext*> &reachableContexts ){
 	QVector<Declaration*> foundDeclarations;
 	QList<Declaration*> declarations;
 	
 	// find declaration in local context
-	declarations = context.findLocalDeclarations( identifier, location );
-	foreach( Declaration *declaration, declarations ){
-		foundDeclarations.append( declaration );
-	}
+// 	declarations = context.findLocalDeclarations( identifier, location );
+// 	foreach( Declaration *declaration, declarations ){
+// 		foundDeclarations.append( declaration );
+// 	}
 	
-	// find declaration in this context, base class and up the parent chain
-	declarations = context.findDeclarations( identifier );
+	// find declaration in this context and up the parent chain
+	declarations = context.findDeclarations( identifier, location );
 	foreach( Declaration *declaration, declarations ){
 		if( ! foundDeclarations.contains( declaration ) ){
 			foundDeclarations.append( declaration );
 		}
 	}
 	
-	// find declarations in base context
-	foundDeclarations.append( declarationsForNameInBase( identifier, context ) );
+	// find declarations in base context. for this to work properly we to first find the
+	// closest class declaration up the parent chain
+	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
+	if( classDecl && classDecl->internalContext() ){
+		foundDeclarations.append( declarationsForNameInBase( identifier,
+			*classDecl->internalContext(), reachableContexts ) );
+	}
 	
 	// find declarations in neighbor and pinned contexts
-	for( const DUContext *reachable : reachableContexts ){
-		declarations = reachable->findDeclarations( identifier );
-		foreach( Declaration* declaration, declarations ){
-			foundDeclarations.append( declaration );
+	if( useReachable ){
+		for( const DUContext *reachable : reachableContexts ){
+			declarations = reachable->findDeclarations( identifier );
+			foreach( Declaration* declaration, declarations ){
+				foundDeclarations.append( declaration );
+			}
 		}
 	}
 	
@@ -411,7 +437,7 @@ const QVector<const TopDUContext*> &reachableContexts ){
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
-const DUContext &context ){
+const DUContext &context, const QVector<const TopDUContext*> &reachableContexts ){
 	QVector<Declaration*> foundDeclarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
@@ -419,19 +445,28 @@ const DUContext &context ){
 		return foundDeclarations;
 	}
 	
-	TopDUContext * const topContext = context.topContext();
+	TopDUContext * const top = context.topContext();
 	uint i;
 	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
-		const StructureType::Ptr structType = classDecl->baseClasses()[ i ]
-			.baseClass.abstractType().cast<StructureType>();
+		const StructureType::Ptr structType( classDecl->baseClasses()[ i ]
+			.baseClass.abstractType().cast<StructureType>() );
 		if( ! structType ){
 			continue;
 		}
 		
-		DUContext * const baseContext = structType->internalContext( topContext );
+		DUContext *baseContext = structType->internalContext( top );
 		if( ! baseContext ){
-			continue;
+			foreach( const DUContext *each, reachableContexts ){
+				baseContext = structType->internalContext( each->topContext() );
+				if( baseContext ){
+					break;
+				}
+			}
+			
+			if( ! baseContext ){
+				continue;
+			}
 		}
 		
 		const QList<Declaration*> declarations( baseContext->findDeclarations( identifier ) );
@@ -441,7 +476,7 @@ const DUContext &context ){
 			}
 		}
 		
-		foundDeclarations.append( declarationsForNameInBase( identifier, *baseContext ) );
+		foundDeclarations.append( declarationsForNameInBase( identifier, *baseContext, reachableContexts ) );
 	}
 	
 	return foundDeclarations;
@@ -449,7 +484,8 @@ const DUContext &context ){
 
 QVector<Declaration*> Helpers::constructorsInClass( const DUContext &context ){
 	// find declaration in this context without base class or parent chain
-	QList<Declaration*> declarations( context.findLocalDeclarations( nameConstructor ) );
+	QList<Declaration*> declarations( context.findLocalDeclarations( nameConstructor,
+		CursorInRevision::invalid(), nullptr, {}, DUContext::OnlyFunctions ) );
 	return QVector<Declaration*>( declarations.cbegin(), declarations.cend() );
 }
 

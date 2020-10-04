@@ -9,6 +9,8 @@
 #include <language/duchain/classfunctiondeclaration.h>
 #include <language/duchain/types/functiontype.h>
 
+#include <language/duchain/persistentsymboltable.h>
+
 #include "UseBuilder.h"
 #include "ParseSession.h"
 #include "EditorIntegrator.h"
@@ -26,6 +28,8 @@ UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref>
 pParseSession( *editor.parseSession() ),
 pEnableErrorReporting( true ),
 pAllowVoidType( false ),
+pCanBeType( true ),
+pAutoThis( true ),
 pNeighborContexts( ncs )
 {
 	setDependencies( deps );
@@ -50,7 +54,6 @@ DUContext *UseBuilder::contextAtOrCurrent( const CursorInRevision &pos ){
 }
 
 
-
 void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ){
 	if( ! node->nameSequence ){
 		return;
@@ -61,7 +64,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	bool checkForVoid = pAllowVoidType;
-	Declaration *decl = nullptr;
+	bool useReachable = true;
 	
 	do{
 		const QString name( editor()->tokenText( *iter->element ) );
@@ -71,41 +74,77 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			context = nullptr;
 			
 		}else{
-			bool addUse = true;
+			Declaration *decl = nullptr;
 			
 			if( context ){
-				DUChainReadLocker lock;
 				const IndexedIdentifier identifier( (Identifier( name )) );
-				decl = Helpers::declarationForName( identifier,
-					CursorInRevision::invalid(), *context, reachableContexts() );
-				context = nullptr;
+				DUChainReadLocker lock;
+				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
+					*context, useReachable, reachableContexts() );
 			}
 			
-			if( decl ){
-				if( decl->kind() == Declaration::Kind::Namespace ){
-					// do not add uses for namespaces. they are special in dragonscript
-					// since they are shared and there exists no namespace declaration
-// 					addUse = false;
+			if( ! decl ){
+				if( context ){
+					reportSemanticError( useRange, i18n( "Unknown type: %1 in %2",
+						name, context->localScopeIdentifier().toString() ) );
+#if 0
+					// findLocalDeclarations() is broken for namespaces
+					{
+						DUChainReadLocker lock;
+						const QVector<QPair<Declaration*, int>> d(context->allDeclarations(
+							CursorInRevision::invalid(), context->topContext(), false));
+						const IndexedIdentifier identifier( (Identifier( name )) );
+						qDebug() << "CHECK" << identifier.identifier().toString() << identifier.index()
+							<< context->inSymbolTable() << context->scopeIdentifier(false);
+						foreach(auto each, d){
+							qDebug() << "AllDecl" << each.first->toString()
+								<< each.first->indexedIdentifier().index()
+								<< each.first->inSymbolTable()
+								<< (IndexedDeclaration(each.first).topContextIndex() == context->topContext()->ownIndex())
+								<< (each.first->context() == context);
+						}
+						QList<Declaration*> d2( context->findLocalDeclarations(identifier,
+							CursorInRevision::invalid()));
+						foreach(Declaration *each, d2){
+							qDebug() << "LocalDecl" << each->toString() << each->indexedIdentifier().index();
+						}
+						const IndexedQualifiedIdentifier id(context->scopeIdentifier(true) + identifier);
+						const IndexedDeclaration* d3;
+						uint count;
+						PersistentSymbolTable::self().declarations(id, count, d3);
+						qDebug() << "SHIT" << id.identifier().toString() << count << d3 << (d3 ? d3->declaration() : nullptr)
+							<< (d3 && d3->declaration() ? d3->declaration()->toString() : "null");
+					}
+#endif
+					
+				}else{
+					reportSemanticError( useRange, i18n( "Unknown type: %1", name ) );
 				}
-				
-			}else{
-				reportSemanticError( useRange, i18n( "Unknown type: %1", name ) );
 			}
 			
-			if( addUse ){
-				UseBuilderBase::newUse( iter->element, DeclarationPointer( decl ) );
-// 				UseBuilderBase::newUse( useRange, DeclarationPointer( decl ) );
-			}
+			UseBuilderBase::newUse( iter->element, DeclarationPointer( decl ) );
 			
+			context =  nullptr;
 			if( decl ){
 				context = decl->internalContext();
 			}
 		}
 		
 		checkForVoid = false;
+		useReachable = false;
 		
 		iter = iter->next;
 	}while( iter != end );
+}
+
+void UseBuilder::visitPin( PinAst* ){
+	// ducontext findLocalDeclarations() is broken beyond repair for namespaces
+// 	UseBuilderBase::visitPin( node );
+}
+
+void UseBuilder::visitNamespace( NamespaceAst* ){
+	// ducontext findLocalDeclarations() is broken beyond repair for namespaces
+// 	UseBuilderBase::visitNamespace( node );
 }
 
 void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ){
@@ -134,26 +173,26 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	
 	// find this/super class constructors
 	const RangeInRevision useRange( editor()->findRange( node->super ) );
-	const DUContext *superContext = context;
+	const DUContext *searchContext = context->parentContext();
 	QVector<Declaration*> declarations;
 	
 	DUChainReadLocker lock;
 	const TopDUContext &top = *topContext();
 	
-	if( superContext && isSuper ){
-		const ClassDeclaration *classDecl = Helpers::classDeclFor( superContext->parentContext() );
-		superContext = nullptr;
+	if( searchContext && isSuper ){
+		const ClassDeclaration *classDecl = Helpers::classDeclFor( searchContext );
+		searchContext = nullptr;
 		
 		if( classDecl ){
 			classDecl = Helpers::superClassOf( top, *classDecl, reachableContexts() );
 			if( classDecl ){
-				superContext = classDecl->internalContext();
+				searchContext = classDecl->internalContext();
 			}
 		}
 	}
 	
-	if( superContext ){
-		declarations = Helpers::constructorsInClass( *superContext );
+	if( searchContext ){
+		declarations = Helpers::constructorsInClass( *searchContext );
 	}
 	lock.unlock();
 	
@@ -259,7 +298,7 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 		lock.unlock();
 		
 		if( classDecl ){
-			reportSemanticError( useRange, i18n( "No suitable constructor found. expected %1",
+			reportSemanticError( useRange, i18n( "No suitable constructor found. expected %1.%2",
 				classDecl->identifier().toString(), sig ) );
 			
 		}else{
@@ -273,6 +312,8 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 void UseBuilder::visitExpression( ExpressionAst *node ){
 	pCurExprContext = contextAtOrCurrent( editor()->findPosition( *node ) );
 	pCurExprType = nullptr;
+	pCanBeType = true;
+	pAutoThis = true;
 	
 	UseBuilderBase::visitExpression( node );
 }
@@ -306,6 +347,8 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	
 	pCurExprContext = declaration ? declaration->internalContext() : nullptr;
 	pCurExprType = type;
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
@@ -340,27 +383,18 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		DUChainReadLocker lock;
 		if( context ){
 			declarations = Helpers::declarationsForName( identifier,
-				editor()->findPosition( *node ), *context, reachableContexts() );
+				editor()->findPosition( *node ), *context, pCanBeType, reachableContexts() );
 		}
-			if(editor()->tokenText(*node->name)=="pClass"){
-				qDebug() << "TYPE TYPE" << (!declarations.isEmpty() ? declarations.first()->toString() : "?")
-					<< "context" << (context ? context->localScopeIdentifier().toString() : "?")
-					<< "pClass" << (context && context->parentContext() ? context->parentContext()->localScopeIdentifier().toString() : "?");
-			}
 		
-		if( declarations.isEmpty() ){
-			// if the context is not a class context we are at the beginning of an expression
-			// and auto-this has to be used. find the this-context and try again
-			if( context && ! dynamic_cast<ClassDeclaration*>( context->owner() ) ){
-				const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *context );
-				if( classDecl ){
-					context = classDecl->internalContext();
-				}
-				
-				if( context ){
-					declarations = Helpers::declarationsForName( identifier,
-						editor()->findPosition( *node ), *context, reachableContexts() );
-				}
+		if( declarations.isEmpty() && pAutoThis && context && ! dynamic_cast<ClassDeclaration*>( context->owner() ) ){
+			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *context );
+			if( classDecl ){
+				context = classDecl->internalContext();
+			}
+			
+			if( context ){
+				declarations = Helpers::declarationsForName( identifier,
+					editor()->findPosition( *node ), *context, false, reachableContexts() );
 			}
 		}
 		
@@ -381,6 +415,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			UseBuilderBase::visitExpressionMember( node );
 			pCurExprContext = nullptr;
 			pCurExprType = nullptr;
+			pCanBeType = false;
+			pAutoThis = false;
 			return;
 		}
 		
@@ -400,6 +436,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			
 			pCurExprContext = nullptr;
 			pCurExprType = nullptr;
+			pCanBeType = false;
+			pAutoThis = false;
 			return;
 		}
 		lock.unlock();
@@ -410,6 +448,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		lock.lock();
 		pCurExprType = declaration->abstractType();
 		pCurExprContext = Helpers::contextForType( *topContext(), pCurExprType, reachableContexts() );
+		pCanBeType = declaration->type<StructureType>();
+		pAutoThis = false;
 	}
 }
 
@@ -427,6 +467,8 @@ void UseBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 		pCurExprContext = nullptr;
 		pCurExprType = nullptr;
 	}
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
@@ -444,6 +486,9 @@ void UseBuilder::visitExpressionAddition( ExpressionAdditionAst *node ){
 		contextLeft = pCurExprContext;
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
@@ -483,6 +528,9 @@ void UseBuilder::visitExpressionAssign( ExpressionAssignAst *node ){
 		
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
@@ -500,6 +548,9 @@ void UseBuilder::visitExpressionBitOperation( ExpressionBitOperationAst *node ){
 		contextLeft = pCurExprContext;
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
@@ -557,6 +608,9 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 		
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
@@ -604,6 +658,8 @@ void UseBuilder::visitExpressionLogic( ExpressionLogicAst *node ){
 	
 	pCurExprType = typeBool;
 	pCurExprContext = Helpers::contextForType( top, typeBool, reachableContexts() );
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
@@ -621,6 +677,8 @@ void UseBuilder::visitExpressionMultiply( ExpressionMultiplyAst *node ){
 		contextLeft = pCurExprContext;
 		iter = iter->next;
 	}while( iter != end );
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
@@ -638,14 +696,13 @@ void UseBuilder::visitExpressionPostfix( ExpressionPostfixAst *node ){
 		contextLeft = pCurExprContext;
 		iter = iter->next;
 	}while( iter != end );
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
-	
-	pCurExprContext = context;
-	pCurExprType = nullptr;
-	visitNode( node->left );
+	( void )typeOfNode( node->left, context );
 	
 	if( ! node->moreSequence ){
 		return;
@@ -657,10 +714,14 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	do{
 		pCurExprContext = context;
 		pCurExprContext = nullptr;
+		pCanBeType = true;
+		pAutoThis = false;
 		visitNode( iter->element->type );
 		
 		pCurExprContext = nullptr;
 		pCurExprType = nullptr;
+		pCanBeType = false;
+		pAutoThis = false;
 		
 		if( iter->element->op && iter->element->op->op != -1 ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
@@ -695,6 +756,9 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 		
 		iter = iter->next;
 	}while( iter != end );
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
@@ -739,6 +803,9 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 			contextRight = pCurExprContext;
 		}
 	}
+	
+	pCanBeType = false;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
@@ -765,6 +832,8 @@ void UseBuilder::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ){
 	
 	pCurExprContext = Helpers::contextForType( top, typeIf, reachableContexts() );
 	pCurExprType = typeIf;
+	pCanBeType = false;
+	pAutoThis = false;
 	}
 	
 	if( ! validCondition ){
@@ -783,6 +852,8 @@ void UseBuilder::visitStatementFor( StatementForAst *node ){
 	// as if ExpressionAst would be used.
 	pCurExprContext = contextAtOrCurrent( editor()->findPosition( *node ) );
 	pCurExprType = nullptr;
+	pCanBeType = false;
+	pAutoThis = false;
 	
 	UseBuilderBase::visitStatementFor( node );
 }
@@ -792,6 +863,8 @@ void UseBuilder::visitStatementFor( StatementForAst *node ){
 DUContext *UseBuilder::functionGetContext( AstNode *node, DUContext *context ){
 	pCurExprContext = context;
 	pCurExprType = nullptr;
+	pCanBeType = true;
+	pAutoThis = true;
 	visitNode( node );
 	
 	if( ! pCurExprContext ){
@@ -813,6 +886,8 @@ AbstractType::Ptr UseBuilder::typeOfNode( AstNode *node, DUContext *context ){
 	
 	pCurExprContext = context;
 	pCurExprType = nullptr;
+	pCanBeType = true;
+	pAutoThis = true;
 	visitNode( node );
 	
 	return pCurExprType ? pCurExprType : Helpers::getTypeInvalid();
@@ -832,7 +907,7 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 	if( context ){
 		DUChainReadLocker lock;
 		declarations = Helpers::declarationsForName( identifier,
-			CursorInRevision::invalid(), *context, reachableContexts() );
+			editor()->findPosition( *node ), *context, false, reachableContexts() );
 	}
 	
 	if( declarations.isEmpty() ){
@@ -998,8 +1073,6 @@ void UseBuilder::reportSemanticHint( const RangeInRevision &range, const QString
 	if( ! pEnableErrorReporting ){
 		return;
 	}
-	
-// 	qDebug() << "KDevDScript: UseBuilder::reportSemanticHint:" << hint;
 	
 	Problem * const problem = new Problem();
 	problem->setFinalLocation( DocumentRange( pParseSession.currentDocument(), range.castToSimpleRange() ) );

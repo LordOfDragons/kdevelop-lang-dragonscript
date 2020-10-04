@@ -25,6 +25,8 @@ private:
 	AbstractType::Ptr pCurExprType;
 	bool pEnableErrorReporting;
 	bool pAllowVoidType;
+	bool pCanBeType;
+	bool pAutoThis;
 	const QVector<ReferencedTopDUContext> &pNeighborContexts;
 	
 	
@@ -46,6 +48,8 @@ public:
 	
 protected:
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;
+	void visitPin( PinAst *node ) override;
+	void visitNamespace( NamespaceAst *node ) override;
 	void visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ) override;
 	void visitExpression( ExpressionAst *node ) override;
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;

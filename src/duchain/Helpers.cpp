@@ -56,7 +56,7 @@ const QualifiedIdentifier Helpers::pTypeObject( "Object" );
 const QualifiedIdentifier Helpers::pTypeBlock( "Block" );
 const QualifiedIdentifier Helpers::pTypeEnumeration( "Enumeration" );
 
-static const IndexedIdentifier nameConstructor( Identifier( "new" ) );
+const IndexedIdentifier Helpers::pNameConstructor( Identifier( "new" ) );
 
 
 
@@ -297,6 +297,15 @@ IndexedString Helpers::getDocumentationFileObject(){
 	return documentationFileObject;
 }
 
+IndexedString Helpers::getDocumentationFileEnumeration(){
+	if( documentationFileEnumeration.isEmpty() ){
+		documentationFileEnumeration = IndexedString(
+			QStandardPaths::locate( QStandardPaths::GenericDataLocation,
+				QString( "kdevdragonscriptsupport/dslangdoc/Enumeration.ds" ) ) );
+	}
+	return documentationFileEnumeration;
+}
+
 Declaration *Helpers::getInternalTypeDeclaration( const TopDUContext &top,
 const QualifiedIdentifier &identifier, const QVector<const TopDUContext*> &reachableContexts ){
 	QList<Declaration*> declarations( top.findDeclarations( identifier ) );
@@ -397,9 +406,14 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 
 QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
 const CursorInRevision &location, const DUContext &context, bool useReachable,
-const QVector<const TopDUContext*> &reachableContexts ){
+const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
+	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
 	QVector<Declaration*> foundDeclarations;
 	QList<Declaration*> declarations;
+	
+	if( onlyFunctions ){
+		searchFlags = ( DUContext::SearchFlag )( searchFlags | DUContext::OnlyFunctions );
+	}
 	
 	// find declaration in local context
 // 	declarations = context.findLocalDeclarations( identifier, location );
@@ -408,7 +422,7 @@ const QVector<const TopDUContext*> &reachableContexts ){
 // 	}
 	
 	// find declaration in this context and up the parent chain
-	declarations = context.findDeclarations( identifier, location );
+	declarations = context.findDeclarations( identifier, location, nullptr, searchFlags );
 	foreach( Declaration *declaration, declarations ){
 		if( ! foundDeclarations.contains( declaration ) ){
 			foundDeclarations.append( declaration );
@@ -420,13 +434,14 @@ const QVector<const TopDUContext*> &reachableContexts ){
 	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
 	if( classDecl && classDecl->internalContext() ){
 		foundDeclarations.append( declarationsForNameInBase( identifier,
-			*classDecl->internalContext(), reachableContexts ) );
+			*classDecl->internalContext(), reachableContexts, onlyFunctions ) );
 	}
 	
 	// find declarations in neighbor and pinned contexts
 	if( useReachable ){
 		for( const DUContext *reachable : reachableContexts ){
-			declarations = reachable->findDeclarations( identifier );
+			declarations = reachable->findDeclarations( identifier,
+				CursorInRevision::invalid(), nullptr, searchFlags );
 			foreach( Declaration* declaration, declarations ){
 				foundDeclarations.append( declaration );
 			}
@@ -437,7 +452,7 @@ const QVector<const TopDUContext*> &reachableContexts ){
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
-const DUContext &context, const QVector<const TopDUContext*> &reachableContexts ){
+const DUContext &context, const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
 	QVector<Declaration*> foundDeclarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
@@ -445,8 +460,13 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 		return foundDeclarations;
 	}
 	
+	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
 	TopDUContext * const top = context.topContext();
 	uint i;
+	
+	if( onlyFunctions ){
+		searchFlags = ( DUContext::SearchFlag )( searchFlags | DUContext::OnlyFunctions );
+	}
 	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
 		const StructureType::Ptr structType( classDecl->baseClasses()[ i ]
@@ -469,14 +489,16 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 			}
 		}
 		
-		const QList<Declaration*> declarations( baseContext->findDeclarations( identifier ) );
+		const QList<Declaration*> declarations( baseContext->findDeclarations(
+			identifier, CursorInRevision::invalid(), nullptr, searchFlags ) );
 		foreach( Declaration *declaration, declarations ){
 			if( ! foundDeclarations.contains( declaration ) ){
 				foundDeclarations.append( declaration );
 			}
 		}
 		
-		foundDeclarations.append( declarationsForNameInBase( identifier, *baseContext, reachableContexts ) );
+		foundDeclarations.append( declarationsForNameInBase(
+			identifier, *baseContext, reachableContexts, onlyFunctions ) );
 	}
 	
 	return foundDeclarations;
@@ -484,7 +506,7 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 
 QVector<Declaration*> Helpers::constructorsInClass( const DUContext &context ){
 	// find declaration in this context without base class or parent chain
-	QList<Declaration*> declarations( context.findLocalDeclarations( nameConstructor,
+	QList<Declaration*> declarations( context.findLocalDeclarations( pNameConstructor,
 		CursorInRevision::invalid(), nullptr, {}, DUContext::OnlyFunctions ) );
 	return QVector<Declaration*>( declarations.cbegin(), declarations.cend() );
 }
@@ -553,7 +575,7 @@ const QVector<const TopDUContext*> &reachableContexts ){
 		bool ignoreFunction = false;
 		foreach( const ClassFunctionDeclaration *checkFuncDecl, possibleFunctions ){
 			// if this is a constructor call do not check the return type
-			if( nameConstructor == declaration->identifier() ){
+			if( pNameConstructor == declaration->identifier() ){
 				if( sameSignatureAnyReturnType( funcType, checkFuncDecl->type<FunctionType>() )
 				&& overrides( top, checkFuncDecl, funcDecl, reachableContexts ) ){
 					ignoreFunction = true;

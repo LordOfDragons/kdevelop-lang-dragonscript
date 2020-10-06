@@ -78,64 +78,31 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 	}
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
+	QList<QPair<IdentifierAst*, QualifiedIdentifier>> aliases;
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	QualifiedIdentifier identifier;
 	
 	do{
 		identifier += Identifier( editor()->tokenText( *iter->element ) );
+		aliases.insert( 0, QPair<IdentifierAst*, QualifiedIdentifier>( iter->element, identifier ) );
 		iter = iter->next;
 	}while( iter != end );
 	
-	const RangeInRevision range( editorFindRangeNode( node->name ) );
-	NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
-		globalImportIdentifier(), range, DeclarationFlags::NoFlags );
-	eventuallyAssignInternalContext();
-	decl->setKind( Declaration::NamespaceAlias );
-	decl->setImportIdentifier( identifier );
-	openContext( iter->element, range, DUContext::Namespace, iter->element );
-	
-	{
-	DUChainWriteLocker lock;
-	currentContext()->setLocalScopeIdentifier( identifier );
-	}
-	decl->setInternalContext( currentContext() );
-	closeContext();
-	
-	// TODO search for reachable contexts through this pinned namespace and add it to reachableContexts()
-	
-#if 0
-	do{
+	// dragonscript allows searching in parent namespaces of pinned namespaces.
+	// to get this working we need an alias definition for the pinned namespace
+	// as well as for all parent namespaces. to get the right search order the
+	// alias definitions have to be done in reverse order
+	QList<QPair<IdentifierAst*, QualifiedIdentifier>>::const_iterator iterAlias;
+	for( iterAlias = aliases.cbegin(); iterAlias != aliases.cend(); iterAlias++ ){
+		const RangeInRevision range( editorFindRangeNode( iterAlias->first ) );
 		NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
-			iter->element, iter->element, DeclarationFlags::NoFlags );
+			globalImportIdentifier(), range, DeclarationFlags::NoFlags );
 		eventuallyAssignInternalContext();
 		decl->setKind( Declaration::NamespaceAlias );
-		decl->setComment( getDocumentationForNode( *node ) );
-		openContext( iter->element, editorFindRangeNode( iter->element ), DUContext::Namespace, iter->element );
-		currentContext()->setLocalScopeIdentifier( identifierForNode( iter->element ) );
-		decl->setInternalContext( currentContext() );
-		closeCount++;
-	}while( iter != end );
-	
-	while( closeCount-- > 0 ){
+		decl->setImportIdentifier( iterAlias->second );
+		decl->setInternalContext( openContext( iter->element, range, DUContext::Namespace, iterAlias->second ) );
 		closeContext();
 	}
-#endif
-	
-#if 0
-	DUChainReadLocker lock;
-	PinNamespaceVisitor pinvisitor( *editor(), currentContext() );
-	if( ! node->name ){
-		return;
-	}
-	
-	pinvisitor.visitFullyQualifiedClassname( node->name );
-	
-	const QVector<DUChainPointer<const DUContext>> &namespaces = pinvisitor.namespaces();
-	foreach( const DUChainPointer<const DUContext> &each, namespaces ){
-//		qDebug() << "KDevDScript: DeclarationBuilder::visitPin add" << each.operator->();
-		pPinned.append( each );
-	}
-#endif
 }
 
 void DeclarationBuilder::visitRequires( RequiresAst *node ){
@@ -150,12 +117,17 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	
 	do{
+		const RangeInRevision range( editorFindRangeNode( iter->element ) );
+		
 		ClassDeclaration *decl = openDeclaration<ClassDeclaration>(
 			iter->element, iter->element, DeclarationFlags::NoFlags );
+// 		NamespaceAliasDeclaration *decl = openDeclaration<NamespaceAliasDeclaration>(
+// 			globalImportIdentifier(), range, DeclarationFlags::NoFlags );
 		
 		eventuallyAssignInternalContext();
 		
 		decl->setKind( Declaration::Namespace );
+// 		decl->setKind( Declaration::NamespaceAlias );
 		decl->setComment( getDocumentationForNode( *node ) );
 		
 		StructureType::Ptr type( new StructureType() );
@@ -164,7 +136,7 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		
 		openType( type );
 		
-		openContext( iter->element, editorFindRangeNode( iter->element ), DUContext::Namespace, iter->element );
+		openContext( iter->element, range, DUContext::Namespace, iter->element );
 		
 		{
 		DUChainWriteLocker lock;
@@ -338,7 +310,6 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	}
 	
 	decl->setKind( Declaration::Instance );
-	decl->setStatic( false );  // TODO check type modifiers
 	decl->setComment( getDocumentationForNode( *node ) );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
@@ -360,8 +331,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	}
 	decl->setStorageSpecifiers( storageSpecifiers );
 	
-	FunctionDeclaration::FunctionSpecifiers functionSpecifiers( FunctionDeclaration::VirtualSpecifier );
-	decl->setFunctionSpecifiers( functionSpecifiers );
+	decl->setFunctionSpecifiers( FunctionDeclaration::VirtualSpecifier );
 	
 	FunctionType::Ptr funcType( new FunctionType() );
 	
@@ -381,8 +351,15 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 		}
 	}
 	
+	// this one is strange. it looks as if kdevelop wants two contexts for a function.
+	// the "Function" type context has to contain all arguments while the "Other" type
+	// context has to contain the function body.
+	// 
+	// but by doing it that way function arguments are not visible. according to other
+	// plugins you have to import the function context to the body context. very complicated
 	openContextClassFunction( node );
-	decl->setInternalContext( currentContext() );
+	DUContext * const functionContext = currentContext();
+	decl->setInternalContext( functionContext );
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *iter = node->begin->argumentsSequence->front();
@@ -412,7 +389,38 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	// type and arguments in function type otherwise the information will not show up in browsing
 	decl->setType( funcType );
 	
-	DeclarationBuilderBase::visitClassFunctionDeclare( node );
+	// update context local scope identifier. DUChain reacts badely to multiple functions
+	// sharing the same name but different signature. we can though not determine the scope
+	// name until after arguments have been parsed
+	{
+	DUChainWriteLocker lock;
+	decl->internalContext()->setLocalScopeIdentifier( QualifiedIdentifier(
+		decl->identifier().toString() + funcType->partToString( FunctionType::SignatureArguments ) ) );
+	}
+	
+	// function body
+	if( node->bodySequence ){
+		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
+		const KDevPG::ListNode<StatementAst*> *end = iter;
+		
+		/*
+		if( node->begin->super != -1 ){
+			openContext( iter->element, RangeInRevision( editor()->findPosition( node->begin->super ),
+				editor()->findPosition( *node->bodySequence->back()->element ) ), DUContext::Other );
+			
+		}else{
+			openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
+		}
+		currentContext()->addImportedParentContext( functionContext );
+		*/
+		
+		do{
+			visitNode( iter->element );
+			iter = iter->next;
+		}while( iter != end );
+		
+// 		closeContext();
+	}
 	
 	closeContext();
 	closeDeclaration();
@@ -574,9 +582,16 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	decl->setClassModifier( ClassDeclarationData::Final );
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
+	// open type. we need it for generating functions
+	StructureType::Ptr type( new StructureType() );
+	type->setDeclaration( decl );
+	decl->setType( type );
+	
+	openType( type );
+	
 	// base class. this is only done if this is not the enumeration class from
 	// the documentation being parsed
-	if( pPhase > 1 ){
+	if( pPhase > 1 && document() != Helpers::getDocumentationFileEnumeration() ){
 		DUChainReadLocker lock;
 		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
 			*topContext(), Helpers::getTypeEnumeration(), reachableContexts() );
@@ -585,16 +600,38 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 			base.baseClass = typeDecl->abstractType()->indexed();
 			base.access = Declaration::Public;
 			decl->addBaseClass( base );
+			
+			// enumeration class is special in that a bunch of generated functions
+			// are added matching the class type
+			const QVector<Declaration*> sourceDecl( typeDecl->internalContext()->localDeclarations() );
+			static const IndexedIdentifier identWithOrder( (Identifier( "withOrder" )) );
+			static const IndexedIdentifier identNamed( (Identifier( "named" )) );
+			
+			foreach( Declaration *each, sourceDecl ){
+				const ClassFunctionDeclaration * const funcDecl = dynamic_cast<ClassFunctionDeclaration*>( each );
+				if( ! funcDecl || ( funcDecl->indexedIdentifier() != identNamed
+				&&  funcDecl->indexedIdentifier() != identWithOrder ) ){
+					continue;
+				}
+				
+				ClassFunctionDeclaration * copyDecl = openDeclaration<ClassFunctionDeclaration>(
+					funcDecl->identifier(), RangeInRevision::invalid() );
+				copyDecl->setKind( funcDecl->kind() );
+				copyDecl->setComment( funcDecl->comment() );
+				copyDecl->setAccessPolicy( funcDecl->accessPolicy() );
+				copyDecl->setStorageSpecifiers( ClassMemberDeclaration::StaticSpecifier );
+				copyDecl->setFunctionSpecifiers( FunctionDeclaration::VirtualSpecifier );
+				
+				FunctionType::Ptr copyFuncType( dynamic_cast<FunctionType*>( funcDecl->type<FunctionType>()->clone() ) );
+				copyFuncType->setReturnType( type );
+				copyDecl->setType( AbstractType::Ptr( copyFuncType ) );
+				
+				closeDeclaration();
+			}
 		}
 	}
 	
 	// body
-	StructureType::Ptr type( new StructureType() );
-	type->setDeclaration( decl );
-	decl->setType( type );
-	
-	openType( type );
-	
 	openContextEnumeration( node );
 	decl->setInternalContext( currentContext() );
 	

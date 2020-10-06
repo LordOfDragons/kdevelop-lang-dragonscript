@@ -164,7 +164,33 @@ void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
 }
 
 void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
-	// context starts at the end of the declaration
+	/*
+	if( node->begin->name ){
+		if( node->begin->argumentsSequence ){
+			openContext( node->begin->argumentsSequence->front()->element,
+				node->begin->argumentsSequence->back()->element,
+				DUContext::Function, identifierForNode( node->begin->name ) );
+			
+		}else{
+			CursorInRevision location( pEditor->findPosition( *node->begin->name ) );
+			openContext( node, RangeInRevision( location, location ),
+				DUContext::Function, node->begin->name );
+		}
+		
+	}else{
+		if( node->begin->argumentsSequence ){
+			openContext( node->begin->argumentsSequence->front()->element,
+				node->begin->argumentsSequence->back()->element,
+				DUContext::Function, identifierForToken( node->begin->op->op ) );
+			
+		}else{
+			CursorInRevision location( pEditor->findPosition( *node->begin->op ) );
+			openContext( node, RangeInRevision( location, location ),
+				DUContext::Function, identifierForToken( node->begin->op->op ) );
+		}
+	}
+	*/
+	
 	const CursorInRevision cursorBegin( node->begin->name
 		? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )
 		: pEditor->findPosition( *node->begin->op, EditorIntegrator::BackEdge ) );
@@ -173,14 +199,11 @@ void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
 		: pEditor->findPosition( node->begin->endToken, EditorIntegrator::BackEdge ) );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	openContext( node, range, DUContext::Function, node->begin->name );
-	
-	DUChainWriteLocker lock;
 	if( node->begin->name ){
-		currentContext()->setLocalScopeIdentifier( identifierForNode( node->begin->name ) );
+		openContext( node, range, DUContext::Function ); //, node->begin->name );
 		
-	}else if( node->begin->op ){
-		currentContext()->setLocalScopeIdentifier( identifierForToken( node->begin->op->op ) );
+	}else{
+		openContext( node, range, DUContext::Function ); //, identifierForToken( node->begin->op->op ) );
 	}
 }
 

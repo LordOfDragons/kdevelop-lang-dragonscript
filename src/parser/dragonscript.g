@@ -426,7 +426,7 @@ ELIF condition=expression endOfCommand #body=statement*
 RETURN ?value=expression endOfCommand
 -> statementReturn ;;
 
-SELECT value=expression endOfCommand
+SELECT value=expression endOfCommand+
 	#case=statementCase*
 	?( ELSE #else=statement* )
 	END endOfCommand
@@ -758,18 +758,13 @@ QString Parser::tokenText( qint64 begin, qint64 end ){
 }
 
 KDevelop::ProblemPointer Parser::reportProblem( Parser::ProblemType type, const QString &message, int offset ){
-	qint64 sLine;
-	qint64 sCol;
-	qint64 index = tokenStream->index() + offset;
-	
+	const qint64 index = tokenStream->index() + offset;
 	if( index >= tokenStream->size() ){
 		return {};
 	}
 	
-	tokenStream->startPosition( index, &sLine, &sCol );
-	qint64 eLine;
-	qint64 eCol;
-	tokenStream->endPosition( index, &eLine, &eCol );
+	const Lexer::Token& toks = tokenStream->curr();
+	const Lexer::Token& toke = tokenStream->at( index );
 	
 	auto p = KDevelop::ProblemPointer( new KDevelop::Problem() );
 	p->setSource( KDevelop::IProblem::Parser );
@@ -793,49 +788,27 @@ KDevelop::ProblemPointer Parser::reportProblem( Parser::ProblemType type, const 
 	}
 	
 	p->setDescription( message );
-	KTextEditor::Range range( sLine, sCol, eLine, eCol + 1 );
+	KTextEditor::Range range( toks.line, toks.column, toke.line, toke.column + 1 );
 	p->setFinalLocation( KDevelop::DocumentRange( pCurrentDocument, range ) );
 	pProblems << p;
 	return p;
 }
 
 // custom error recovery
-void Parser::expectedToken( int expected, qint64 where, const QString &name ){
-	Q_UNUSED(expected)
-	Q_UNUSED(where)
-	reportProblem( Parser::Error, QStringLiteral( "Expected token \"%1\"" ).arg( name ) );
+void Parser::expectedToken( int kind, qint64 token, const QString &name ){
+	Q_UNUSED(kind)
+	Q_UNUSED(token)
+	reportProblem( Parser::Error, QStringLiteral( "Expected \"%1\"" ).arg( name ) );
 }
 
 void Parser::expectedSymbol( int expectedSymbol, const QString &name ){
 	Q_UNUSED(expectedSymbol)
+	Q_UNUSED(name)
 	
-	qint64 line;
-	qint64 col;
-	qint64 index = tokenStream->index() - 1;
-	if( index == -1 ){
-		if( pDebug ){
-			qDebug() << "KDevDScript: Parser::expectedSymbol token" << name << "but index is -1!";
-		}
-		return;
-	}
-	Token &token = tokenStream->at( index );
+	//const Lexer::Token& tok = tokenStream->curr();
+	//qDebug() << "KDevDScript: Expected symbol" << name << "at" << tok.line << tok.column;
 	
-	if( pDebug ){
-		qDebug() << "KDevDScript: Parser::expectedSymbol token " << name << "starts at:" << token.begin << "index is:" << index;
-	}
-	tokenStream->startPosition( index, &line, &col );
-	QString tokenValue = tokenText( token.begin, token.end );
-	qint64 eLine;
-	qint64 eCol;
-	tokenStream->endPosition( index, &eLine, &eCol );
-	reportProblem( Parser::Error,
-		QStringLiteral( "Expected symbol \"%1\" (current token: \"%2\" [%3] at %4:%5 - %6:%7)" )
-			.arg( name, token.kind != 0 ? tokenValue : QStringLiteral( "EOF" ) )
-			.arg( token.kind )
-			.arg( line )
-			.arg( col )
-			.arg( eLine )
-			.arg( eCol ) );
+ 	reportProblem( Parser::Error, QStringLiteral( "Expected \"%1\"" ).arg( name ) );
 }
 
 void Parser::setDebug( bool debug ){

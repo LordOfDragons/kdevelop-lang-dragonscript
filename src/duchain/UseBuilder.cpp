@@ -581,7 +581,8 @@ void UseBuilder::visitExpressionCompare( ExpressionCompareAst *node ){
 		
 		if( isEquals ){
 			DUChainReadLocker lock;
-			if( ! Helpers::castable( top, typeRight, typeLeft, reachableContexts() ) ){
+			if( ! Helpers::castable( top, typeRight, typeLeft, reachableContexts() )
+			&& ! Helpers::castable( top, typeLeft, typeRight, reachableContexts() ) ){
 				lock.unlock();
 				reportSemanticError( editor()->findRange( *iter->element->op ),
 					i18n( "Cannot compare object of type %1 with %2",
@@ -906,8 +907,18 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 	QVector<Declaration*> declarations;
 	if( context ){
 		DUChainReadLocker lock;
-		declarations = Helpers::declarationsForName( identifier,
-			editor()->findPosition( *node ), *context, false, reachableContexts() );
+		
+		if( identifier == Helpers::nameConstructor() ){
+			// constructors are only looked up in the current class
+			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *context );
+			if( classDecl && classDecl->internalContext() ){
+				declarations = Helpers::constructorsInClass( *classDecl->internalContext() );
+			}
+			
+		}else{
+			declarations = Helpers::declarationsForName( identifier, editor()->findPosition( *node ),
+				*context, false, reachableContexts(), true );
+		}
 	}
 	
 	if( declarations.isEmpty() ){

@@ -41,6 +41,8 @@ private:
 	static const QualifiedIdentifier pTypeBlock;
 	static const QualifiedIdentifier pTypeEnumeration;
 	
+	static const IndexedIdentifier pNameConstructor;
+	
 	static IndexedString documentationFileObject;
 	static IndexedString documentationFileEnumeration;
 	
@@ -85,6 +87,9 @@ public:
 	/** Enumeration type. */
 	static const QualifiedIdentifier &getTypeEnumeration(){ return pTypeEnumeration; }
 	
+	/** Identifier of constructors. */
+	static const IndexedIdentifier &nameConstructor(){ return pNameConstructor; }
+
 	
 	
 	/**
@@ -172,6 +177,9 @@ public:
 	/** Get documentation file for Object class. */
 	static IndexedString getDocumentationFileObject();
 	
+	/** Get enumeration file for Object class. */
+	static IndexedString getDocumentationFileEnumeration();
+	
 	/**
 	 * Get internal type declaration if loaded.
 	 * \note DUChainReadLocker required.
@@ -200,14 +208,15 @@ public:
 	 **/
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context, bool useReachable,
-		const QVector<const TopDUContext*> &reachableContexts );
+		const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions = false );
 	
 	/**
 	 * Find all matching declarations in base classes only.
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<Declaration*> declarationsForNameInBase( const IndexedIdentifier &identifier,
-		const DUContext &context, const QVector<const TopDUContext*> &reachableContexts );
+		const DUContext &context, const QVector<const TopDUContext*> &reachableContexts,
+		bool onlyFunctions = false );
 	
 	/**
 	 * Find all constructor declarations in class.

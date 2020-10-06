@@ -1,12 +1,15 @@
 #ifndef DSCODECOMPLETIONCODEBODY_H
 #define DSCODECOMPLETIONCODEBODY_H
 
+#include <QStack>
+#include <QVector>
+#include <QPair>
+
 #include <language/codecompletion/codecompletioncontext.h>
 #include <language/duchain/duchainpointer.h>
 
 #include "dsp_tokenstream.h"
 
-#include <QStack>
 
 using namespace KDevelop;
 
@@ -45,7 +48,7 @@ public:
 	
 	/** Create code completion context. */
 	DSCodeCompletionCodeBody( DSCodeCompletionContext &completionContext,
-		const DUContextPointer &context, QList<CompletionTreeItemPointer> &completionItems,
+		const DUContext &context, QList<CompletionTreeItemPointer> &completionItems,
 		bool &abort, bool fullCompletion );
 	
 	/**
@@ -89,12 +92,13 @@ protected:
 	
 private:
 	DSCodeCompletionContext &pCodeCompletionContext;
-	const DUContextPointer pContext;
+	
+	const DUContext &pContext;
 	QList<CompletionTreeItemPointer> &pCompletionItems;
 	bool &pAbort;
 	const bool pFullCompletion;
 	
-	DUContextPointer pCompletionContext;
+	const DUContext *pCompletionContext;
 	QVector<QPair<Declaration*, int>> pAllDefinitions;
 	
 	QList<CompletionTreeItemPointer> pConstructorItems;

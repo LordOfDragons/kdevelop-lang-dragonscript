@@ -65,7 +65,7 @@ pStartAst( nullptr )
 DSParseJob::~DSParseJob(){
 	if( ! pNeighborContexts.isEmpty() ){
 		DUChainWriteLocker lock;
-		      pNeighborContexts.clear();
+		pNeighborContexts.clear();
 	}
 }
 

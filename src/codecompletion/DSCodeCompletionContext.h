@@ -1,13 +1,16 @@
 #ifndef DSCODECOMPLETIONCONTEXT_H
 #define DSCODECOMPLETIONCONTEXT_H
 
+#include <QStack>
+
 #include <language/codecompletion/codecompletioncontext.h>
 #include <language/duchain/duchainpointer.h>
 
 #include "codecompletionexport.h"
 #include "dsp_tokenstream.h"
 
-#include <QStack>
+#include "ImportPackage.h"
+
 
 using namespace KDevelop;
 
@@ -74,6 +77,9 @@ public:
 	/** \brief Document. */
 	inline const QUrl &document() const{ return pDocument; }
 	
+	/** \brief Completion position in document. */
+	inline const CursorInRevision &position() const{ return pPosition; }
+	
 	/** \brief The full text leading up to the last separation token ("." for example). */
 	inline const QString &getFullText() const{ return pFullText; }
 	
@@ -86,10 +92,25 @@ public:
 	/** \brief Token stream text. */
 	inline const QByteArray &tokenStreamText() const{ return pTokenStreamText; }
 	
+	/** \brief Project files. */
+	inline const QSet<IndexedString> &projectFiles() const{ return pProjectFiles; }
+	
+	/** \brief Reachable contexts. */
+	inline const QVector<const TopDUContext*> &reachableContexts() const{ return pReachableContexts; }
+	
+	
+	
+protected:
+	void findReachableContexts();
+	
 	
 	
 private:
 	QUrl pDocument;
+    CursorInRevision pPosition;
+	IndexedString pIndexDocument;
+	ImportPackage::Ref pPackage;
+	QSet<IndexedString> pProjectFiles;
 	
 	// the full text leading up to the last separation token ("." for example)
 	const QString pFullText;
@@ -101,6 +122,8 @@ private:
 	QByteArray pTokenStreamText;
 	
 	QList<CompletionTreeElementPointer> pItemGroups;
+	
+	QVector<const TopDUContext*> pReachableContexts;
 };
 
 }

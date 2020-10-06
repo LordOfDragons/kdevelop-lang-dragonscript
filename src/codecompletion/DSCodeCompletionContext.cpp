@@ -4,6 +4,10 @@
 #include <language/duchain/declaration.h>
 #include <language/duchain/ducontext.h>
 #include <language/duchain/use.h>
+#include <interfaces/icore.h>
+#include <interfaces/isession.h>
+#include <interfaces/ilanguagecontroller.h>
+#include <interfaces/iprojectcontroller.h>
 
 #include "dsp_ast.h"
 #include "dsp_tokenstream.h"
@@ -15,6 +19,7 @@
 #include "ExpressionVisitor.h"
 #include "DumpChain.h"
 #include "TokenText.h"
+#include "../DSLanguageSupport.h"
 
 
 using namespace KDevelop;
@@ -31,11 +36,20 @@ CodeCompletionContext( context, contextText /*extractLastExpression( contextText
 	// extractLastExpression() can not be used because block blocks need to be parsed
 	// and these spawn multiple non-spliced lines
 pDocument( document ),
+pPosition( position ),
+pIndexDocument( document ),
 pFullText( contextText ),
 pFollowingText( followingText )
 {
 // 	qDebug() << "KDevDScript: DSCodeCompletionContext():" << pFullText << m_position
 // 		<< pFollowingText << m_duContext->range();
+	
+	pPackage = DSLanguageSupport::self()->importPackages().packageContaining( pIndexDocument );
+	
+	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document );
+	if( project ){
+		pProjectFiles = project->fileSet();
+	}
 }
 
 
@@ -73,6 +87,8 @@ bool &abort, bool fullCompletion ){
 	tokenizeText( m_text );
 // 	debugLogTokenStream();
 	
+	findReachableContexts();
+	
 	// depending on the context different completions are reasonable
 	switch( context->type() ){
 	case DUContext::ContextType::Global:
@@ -93,7 +109,7 @@ bool &abort, bool fullCompletion ){
 	case DUContext::ContextType::Function:
 		// inside "func" definition
 		qDebug() << "DSCodeCompletionContext context type Function";
-		DSCodeCompletionCodeBody( *this, context, items, abort, fullCompletion ).completionItems();
+		DSCodeCompletionCodeBody( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	case DUContext::ContextType::Template:
@@ -115,7 +131,7 @@ bool &abort, bool fullCompletion ){
 		// inside code body of functions, blocks, conditionals, loops, switches,
 		// try catching and variable definitions
 		qDebug() << "DSCodeCompletionContext context type Other";
-		DSCodeCompletionCodeBody( *this, context, items, abort, fullCompletion ).completionItems();
+		DSCodeCompletionCodeBody( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	default:
@@ -219,6 +235,33 @@ void DSCodeCompletionContext::debugLogTokenStream( const QString &prefix ) const
 		qDebug() << qUtf8Printable( prefix ) << "kind=" << TokenText( token.kind )
 			<< token.kind << "begin=" << token.begin << "end=" << token.end
 			<< QString::fromLatin1( pTokenStreamText.mid( token.begin, token.end - token.begin + 1 ) );
+	}
+}
+
+void DSCodeCompletionContext::findReachableContexts(){
+	DUChainReadLocker lock;
+	QSet<IndexedString> files;
+	
+	pReachableContexts.clear();
+	
+	if( pPackage ){
+		files.unite( pPackage->files() );
+		
+	}else{
+		files.unite( pProjectFiles );
+	}
+	
+	const DUChain &duchain = *DUChain::self();
+	
+	foreach( const IndexedString &file, files ){
+		if( file == pIndexDocument ){
+			continue;
+		}
+		
+		TopDUContext * const context = duchain.chainForDocument( file );
+		if( context ){
+			pReachableContexts << context;
+		}
 	}
 }
 

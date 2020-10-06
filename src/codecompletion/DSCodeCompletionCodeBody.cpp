@@ -15,6 +15,7 @@
 #include "ExpressionVisitor.h"
 #include "DumpChain.h"
 #include "TokenText.h"
+#include "Helpers.h"
 #include "items/DSCCItemFunctionCall.h"
 #include "items/DSCodeCompletionItem.h"
 
@@ -27,9 +28,9 @@ using KTextEditor::View;
 namespace DragonScript {
 
 DSCodeCompletionCodeBody::DSCodeCompletionCodeBody( DSCodeCompletionContext &completionContext,
-	const DUContextPointer &context, QList<CompletionTreeItemPointer> &completionItems,
+	const DUContext &context, QList<CompletionTreeItemPointer> &completionItems,
 	bool &abort, bool fullCompletion ) :
-    pCodeCompletionContext( completionContext ),
+pCodeCompletionContext( completionContext ),
 pContext( context ),
 pCompletionItems( completionItems ),
 pAbort( abort ),
@@ -78,10 +79,12 @@ void DSCodeCompletionCodeBody::completionItems(){
 		}}
 		*/
 	
-	DUContextPointer completionContext;
-	DeclarationPointer completionDecl;
+	const Declaration *completionDecl = nullptr;
 	AbstractType::Ptr completionType;
 	Mode mode = Mode::everything;
+	
+	pCompletionContext = nullptr;
+	pAllDefinitions.clear();
 	
 	if( startIndex < tokenStream.size() ){
 		// copy tokens except the final period
@@ -112,7 +115,8 @@ void DSCodeCompletionCodeBody::completionItems(){
 		
 		EditorIntegrator editor( session );
 		DUChainReadLocker lock;
-		ExpressionVisitor exprvisitor( editor, pContext.data(), {} );
+		ExpressionVisitor exprvisitor( editor, &pContext,
+			pCodeCompletionContext.reachableContexts(), pCodeCompletionContext.position() );
 		exprvisitor.visitExpression( ast );
 		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
 			qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
@@ -127,7 +131,8 @@ void DSCodeCompletionCodeBody::completionItems(){
 		*/
 		
 		completionType = exprvisitor.lastType();
-		completionDecl = exprvisitor.lastDeclaration();
+		completionDecl = exprvisitor.lastDeclaration().data();
+		pCompletionContext = exprvisitor.lastContext();
 		
 		if( exprvisitor.isTypeName() ){
 			mode = Mode::type;
@@ -136,32 +141,34 @@ void DSCodeCompletionCodeBody::completionItems(){
 			mode = Mode::instance;
 		}
 		
-		const StructureType::Ptr structType = TypePtr<StructureType>::dynamicCast( completionType );
-		if( structType ){
-			completionContext = structType->internalContext( pContext->topContext() );
-		}
-		
 	}else{
 		// completion at the first word. assume context type and declaration
 		DUChainReadLocker lock;
-		completionContext = pContext;
-		completionDecl = pContext->owner();
+		pCompletionContext = &pContext;
+		completionDecl = pContext.owner();
 		if( completionDecl ){
 			completionType = completionDecl->abstractType();
 		}
 	}
 	
-	if( ! completionDecl || ! completionType || ! completionContext ){
+	if( ! completionDecl || ! completionType || ! pCompletionContext ){
 		qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
+		pCompletionContext = nullptr;
 		return;
 	}
 	
 	// do completion
-	qDebug() << "DSCodeCompletionCodeBody: completion context " << completionDecl.data()->toString();
+	qDebug() << "DSCodeCompletionCodeBody: completion context " << completionDecl->toString();
 	
 	DUChainReadLocker lock;
-	pCompletionContext = completionContext;
-	pAllDefinitions = completionContext->allDeclarations( CursorInRevision::invalid(), completionContext->topContext(), true );
+	
+	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations(
+		pCodeCompletionContext.position(), *pCompletionContext,
+		false, pCodeCompletionContext.reachableContexts() ) );
+	
+// 	foreach(auto d, pAllDefinitions){
+// 		qDebug() << "CHECK" << d.first->context()->scopeIdentifier(true) << d.first->toString() << d.second;
+// 	}
 	
 	addFunctionCalls();
 	addAllMembers( mode );

@@ -100,6 +100,7 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 		eventuallyAssignInternalContext();
 		decl->setKind( Declaration::NamespaceAlias );
 		decl->setImportIdentifier( iterAlias->second );
+		decl->setIdentifier( iterAlias->second.last() );
 		decl->setInternalContext( openContext( iter->element, range, DUContext::Namespace, iterAlias->second ) );
 		closeContext();
 	}
@@ -389,30 +390,39 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	// type and arguments in function type otherwise the information will not show up in browsing
 	decl->setType( funcType );
 	
-	// update context local scope identifier. DUChain reacts badely to multiple functions
+	// update context local scope identifier. DUChain reacts badly to multiple functions
 	// sharing the same name but different signature. we can though not determine the scope
 	// name until after arguments have been parsed
+	const QualifiedIdentifier scopeIdentifier( decl->identifier().toString()
+		+ funcType->partToString( FunctionType::SignatureArguments ) );
 	{
 	DUChainWriteLocker lock;
-	decl->internalContext()->setLocalScopeIdentifier( QualifiedIdentifier(
-		decl->identifier().toString() + funcType->partToString( FunctionType::SignatureArguments ) ) );
+	functionContext->setLocalScopeIdentifier( scopeIdentifier );
 	}
+	
+	// kdeveop seems to expect a "Function" type context containing the arguments and a "Other"
+	// type context containing the function body. this requires împorting the function arguments
+	// context into the function body context
+// 	closeContext();
 	
 	// function body
 	if( node->bodySequence ){
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
 		
-		/*
-		if( node->begin->super != -1 ){
-			openContext( iter->element, RangeInRevision( editor()->findPosition( node->begin->super ),
-				editor()->findPosition( *node->bodySequence->back()->element ) ), DUContext::Other );
-			
-		}else{
-			openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-		}
-		currentContext()->addImportedParentContext( functionContext );
-		*/
+// 		if( node->begin->super != -1 ){
+// 			openContext( iter->element, RangeInRevision( editor()->findPosition( node->begin->super ),
+// 				editor()->findPosition( *node->bodySequence->back()->element ) ),
+// 				DUContext::Other, scopeIdentifier );
+// 			
+// 		}else{
+// 			openContext( iter->element, node->bodySequence->back()->element,
+// 				DUContext::Other, scopeIdentifier );
+// 		}
+// 		{
+// 		DUChainWriteLocker lock;
+// 		currentContext()->addImportedParentContext( functionContext );
+// 		}
 		
 		do{
 			visitNode( iter->element );
@@ -589,6 +599,9 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	
 	openType( type );
 	
+	openContextEnumeration( node );
+	decl->setInternalContext( currentContext() );
+	
 	// base class. this is only done if this is not the enumeration class from
 	// the documentation being parsed
 	if( pPhase > 1 && document() != Helpers::getDocumentationFileEnumeration() ){
@@ -632,9 +645,6 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	}
 	
 	// body
-	openContextEnumeration( node );
-	decl->setInternalContext( currentContext() );
-	
 	if( pPhase > 1 ){
 		DeclarationBuilderBase::visitEnumeration( node );
 	}

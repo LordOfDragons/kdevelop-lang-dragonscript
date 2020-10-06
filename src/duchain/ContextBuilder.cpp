@@ -164,32 +164,22 @@ void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
 }
 
 void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
-	/*
-	if( node->begin->name ){
-		if( node->begin->argumentsSequence ){
-			openContext( node->begin->argumentsSequence->front()->element,
-				node->begin->argumentsSequence->back()->element,
-				DUContext::Function, identifierForNode( node->begin->name ) );
-			
-		}else{
-			CursorInRevision location( pEditor->findPosition( *node->begin->name ) );
-			openContext( node, RangeInRevision( location, location ),
-				DUContext::Function, node->begin->name );
-		}
+#if 0
+	if( node->begin->argumentsSequence ){
+		openContext( node->begin->argumentsSequence->front()->element,
+			node->begin->argumentsSequence->back()->element, DUContext::Function );
 		
 	}else{
-		if( node->begin->argumentsSequence ){
-			openContext( node->begin->argumentsSequence->front()->element,
-				node->begin->argumentsSequence->back()->element,
-				DUContext::Function, identifierForToken( node->begin->op->op ) );
+		if( node->begin->name ){
+			const CursorInRevision location( pEditor->findPosition( *node->begin->name ) );
+			openContext( node->begin->name, RangeInRevision( location, location ), DUContext::Function );
 			
 		}else{
-			CursorInRevision location( pEditor->findPosition( *node->begin->op ) );
-			openContext( node, RangeInRevision( location, location ),
-				DUContext::Function, identifierForToken( node->begin->op->op ) );
+			const CursorInRevision location( pEditor->findPosition( *node->begin->op ) );
+			openContext( node->begin->op, RangeInRevision( location, location ), DUContext::Function );
 		}
 	}
-	*/
+#endif
 	
 	const CursorInRevision cursorBegin( node->begin->name
 		? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )
@@ -199,12 +189,7 @@ void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
 		: pEditor->findPosition( node->begin->endToken, EditorIntegrator::BackEdge ) );
 	const RangeInRevision range( cursorBegin, cursorEnd );
 	
-	if( node->begin->name ){
-		openContext( node, range, DUContext::Function ); //, node->begin->name );
-		
-	}else{
-		openContext( node, range, DUContext::Function ); //, identifierForToken( node->begin->op->op ) );
-	}
+	openContext( node, range, DUContext::Function ); //, node->begin->name );
 }
 
 void ContextBuilder::openContextInterfaceFunction( InterfaceFunctionDeclareAst *node ){

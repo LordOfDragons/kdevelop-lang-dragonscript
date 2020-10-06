@@ -108,6 +108,7 @@ public class OuterClass extends ClassExtendImplement
 		this.pMember1 = ( arg1 + SimpleEnum.entry1.order() * ( arg2 cast int )++ ).toInt()
 		pMember2 = null
 		var ClassExtendImplement2 v = ClassExtendImplement2.new()
+		var Container c;
 		
 		this.callThat().pMember2 = OuterClass.new( this.pMember1 > 8 if "String literal" else this.toString(), not arg2 )
 		OuterClass.isATest( 28, 9 )

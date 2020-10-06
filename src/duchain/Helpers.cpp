@@ -416,7 +416,7 @@ const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
 	}
 	
 	// find declaration in local context
-// 	declarations = context.findLocalDeclarations( identifier, location );
+// 	declarations = context.findLocalDeclarations( identifier, location, nullptr, {}, searchFlags );
 // 	foreach( Declaration *declaration, declarations ){
 // 		foundDeclarations.append( declaration );
 // 	}
@@ -503,6 +503,148 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts,
 	
 	return foundDeclarations;
 }
+
+
+
+QVector<QPair<Declaration*, int>> Helpers::allDeclarations( const CursorInRevision& location,
+const DUContext &context, bool useReachable,
+const QVector<const TopDUContext*> &reachableContexts ){
+	// NOTE allDeclarations() is not used since it returns tons of duplicates and
+	//      does not play well with neighbor context searching
+	
+	QVector<QPair<Declaration*, int>> declarations;
+	
+	// find declaration in this context and up the parent chain
+	const DUContext *searchContext = &context;
+	while( searchContext ){
+		const QVector<Declaration*> foundDeclarations( searchContext->localDeclarations() );
+		foreach( Declaration *each, foundDeclarations ){
+			declarations << QPair<Declaration*, int>{ each, 0 };
+		}
+		searchContext = searchContext->parentContext();
+	}
+	
+	// find declarations in base context. for this to work properly we first find the
+	// closest class declaration up the parent chain
+	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
+	if( classDecl && classDecl->internalContext() ){
+		const QVector<QPair<Declaration*, int>> declList(
+			allDeclarationsInBase( *classDecl->internalContext(), reachableContexts ) );
+		foreach( auto each, declList ){
+			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
+		}
+	}
+	
+	// find declarations in neighbor and pinned contexts
+	if( useReachable ){
+		for( const DUContext *reachable : reachableContexts ){
+			const QVector<Declaration*> foundDeclarations( reachable->localDeclarations() );
+			foreach( Declaration *each, foundDeclarations){
+				declarations << QPair<Declaration*, int>{ each, 1000 };
+			}
+		}
+	}
+	
+	return declarations;
+}
+
+QVector<QPair<Declaration*, int>> Helpers::allDeclarationsInBase(
+const DUContext &context, const QVector<const TopDUContext*> &reachableContexts ){
+	// NOTE allDeclarations() is not used since it returns tons of duplicates and
+	//      does not play well with neighbor context searching
+	
+	QVector<QPair<Declaration*, int>> declarations;
+	
+	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
+	if( ! classDecl || classDecl->baseClassesSize() == 0 ){
+		return declarations;
+	}
+	
+	TopDUContext * const top = context.topContext();
+	uint i;
+	
+	for( i=0; i<classDecl->baseClassesSize(); i++ ){
+		const StructureType::Ptr structType( classDecl->baseClasses()[ i ]
+			.baseClass.abstractType().cast<StructureType>() );
+		if( ! structType ){
+			continue;
+		}
+		
+		DUContext *baseContext = structType->internalContext( top );
+		if( ! baseContext ){
+			foreach( const DUContext *each, reachableContexts ){
+				baseContext = structType->internalContext( each->topContext() );
+				if( baseContext ){
+					break;
+				}
+			}
+			
+			if( ! baseContext ){
+				continue;
+			}
+		}
+		
+		const QVector<Declaration*> foundDeclarations( baseContext->localDeclarations() );
+		foreach( Declaration *each, foundDeclarations ){
+			declarations << QPair<Declaration*, int>{ each, 0 };
+		}
+		
+		const QVector<QPair<Declaration*, int>> declList(
+			allDeclarationsInBase( *baseContext, reachableContexts ) );
+		foreach( auto each, declList ){
+			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
+		}
+	}
+	
+	return declarations;
+}
+
+QVector<QPair<Declaration*, int>> Helpers::consolidate( const QVector<QPair<Declaration*, int>> &list ){
+	QVector<QPair<Declaration*, int>> result;
+	
+	foreach( auto foundDecl, list ){
+		const TypePtr<FunctionType> foundFunc = foundDecl.first->type<FunctionType>();
+		bool include = true;
+		
+		QVector<QPair<Declaration*, int>>::iterator iter;
+		for( iter = result.begin(); iter != result.end(); iter++ ){
+			// functions can be duplicated because interfaces are base class Object too
+			if( foundDecl.first == iter->first ){
+				include = false;
+				break;
+			}
+			
+			// filter out same signature functions keeping those with smaller depth
+			if( foundDecl.first->indexedIdentifier() != iter->first->indexedIdentifier() ){
+				continue;
+			}
+			
+			if( foundFunc ){
+				const TypePtr<FunctionType> checkFunc = foundDecl.first->type<FunctionType>();
+				if( ! foundFunc->equals( checkFunc.data() ) ){
+					continue;
+				}
+			}
+			
+			if( foundDecl.second >= iter->second ){
+				include = false;
+				break;
+				
+			}else{
+				result.erase( iter );
+				break;
+			}
+		}
+		
+		if( include ){
+			result << foundDecl;
+		}
+	}
+	
+	return result;
+}
+
+
 
 QVector<Declaration*> Helpers::constructorsInClass( const DUContext &context ){
 	// find declaration in this context without base class or parent chain

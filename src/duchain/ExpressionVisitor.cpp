@@ -27,9 +27,11 @@ using namespace KDevelop;
 namespace DragonScript {
 
 ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator,
-	const DUContext *ctx, const QVector<const TopDUContext*> &reachableContexts ) :
+	const DUContext *ctx, const QVector<const TopDUContext*> &reachableContexts,
+	const CursorInRevision cursorOffset ) :
 DynamicLanguageExpressionVisitor( ctx ),
 pEditor( editorIntegrator ),
+pCursorOffset( cursorOffset ),
 pIsTypeName( false ),
 pReachableContexts( reachableContexts )
 {
@@ -192,7 +194,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		// base object is a type so find an inner type
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		Declaration * const decl = Helpers::declarationForName( identifier,
-			pEditor.findPosition( *node->name ), *ctx, true, pReachableContexts );
+			pCursorOffset + pEditor.findPosition( *node->name ), *ctx, true, pReachableContexts );
 		
 		if( decl ){
 			encounterDecl( *decl );
@@ -227,7 +229,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		QVector<Declaration*> declarations;
 		if( ctx ){
 			declarations = Helpers::declarationsForName( identifier,
-				pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
+				pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
 				*ctx, false, pReachableContexts );
 		}
 		
@@ -241,7 +243,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 					if( ctx ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
-							pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
+							pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
 							*ctx, true, pReachableContexts );
 					}
 				}
@@ -515,7 +517,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	
 	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
 	declarations = Helpers::declarationsForName( IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, false, pReachableContexts );
+		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, false, pReachableContexts );
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();

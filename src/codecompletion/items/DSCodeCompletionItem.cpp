@@ -6,6 +6,7 @@
 #include <KLocalizedString>
 #include <KTextEditor/View>
 
+#include "Helpers.h"
 #include "DSCodeCompletionItem.h"
 #include "DSCodeCompletionModel.h"
 #include "DSCodeCompletionContext.h"
@@ -47,9 +48,11 @@ pIsType( declaration->kind() == Declaration::Kind::Type )
 		if( declaration->identifier().toString() == "new" ){
 			pIsConstructor = true;
 			
-		}else if( returnType && membDecl && membDecl->isStatic()
-		&& returnType->equals( declaration->context()->owner()->abstractType().data() ) ){
-			pIsConstructor = true;
+		}else if( returnType && membDecl && membDecl->isStatic() ){
+			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *declaration->context() );
+			if( classDecl && returnType->equals( classDecl->abstractType().data() ) ){
+				pIsConstructor = true;
+			}
 		}
 		
 		if( ! pIsConstructor ){

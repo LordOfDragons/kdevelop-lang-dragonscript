@@ -40,6 +40,7 @@ public DynamicLanguageExpressionVisitor
 {
 private:
 	const EditorIntegrator &pEditor;
+	const CursorInRevision pCursorOffset;
 	
 	/** \brief Void type is allowed. */
 	bool pAllowVoid = false;
@@ -62,7 +63,8 @@ private:
 	
 public:
 	ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx,
-		const QVector<const TopDUContext*> &reachableContexts );
+		const QVector<const TopDUContext*> &reachableContexts,
+		const CursorInRevision cursorOffset = CursorInRevision( 0, 0 ) );
 	
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;

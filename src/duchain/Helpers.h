@@ -219,6 +219,26 @@ public:
 		bool onlyFunctions = false );
 	
 	/**
+	 * Find all declarations.
+	 * \note DUChainReadLocker required.
+	 **/
+	static QVector<QPair<Declaration*, int>> allDeclarations( const CursorInRevision& location,
+		const DUContext &context, bool useReachable,
+		const QVector<const TopDUContext*> &reachableContexts );
+	
+	/**
+	 * Find all declarations in base classes only.
+	 * \note DUChainReadLocker required.
+	 **/
+	static QVector<QPair<Declaration*, int>> allDeclarationsInBase( const DUContext &context,
+		const QVector<const TopDUContext*> &reachableContexts );
+	
+	/**
+	 * Consolidate found declarations removing overridden members.
+	 */
+	static QVector<QPair<Declaration*, int>> consolidate( const QVector<QPair<Declaration*, int>> &list );
+	
+	/**
 	 * Find all constructor declarations in class.
 	 * \note DUChainReadLocker required.
 	 **/

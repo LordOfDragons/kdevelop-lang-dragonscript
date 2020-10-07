@@ -167,11 +167,16 @@ ClassDeclaration *TypeFinder::declarationForIntegral( const IndexedIdentifier &i
 	DUChainReadLocker lock;
 	
 	if( pLangClasses.isEmpty() ){
-		ImportPackage::State state;
-		ImportPackageLanguage::self()->contexts( state );
-		if( state.ready ){
-			foreach( TopDUContext *each, state.importContexts ){
-				pLangClasses << TopDUContextPointer( each );
+		// we can not use the contexts() function from ImportPackage since this returns
+		// only phase 3 contexts. since this call is used already on phase 2 contexts
+		// it is necessary to obtain contexts down to phase 1
+		const QSet<IndexedString> &files = ImportPackageLanguage::self()->files();
+		DUChain &duchain = *DUChain::self();
+		
+		foreach( const IndexedString &file, files ){
+			TopDUContext * const context = duchain.chainForDocument( file );
+			if( context ){
+				pLangClasses << TopDUContextPointer( context );
 			}
 		}
 	}

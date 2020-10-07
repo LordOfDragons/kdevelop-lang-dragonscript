@@ -109,6 +109,8 @@ public class OuterClass extends ClassExtendImplement
 		pMember2 = null
 		var ClassExtendImplement2 v = ClassExtendImplement2.new()
 		var Container c;
+		var Debugging.DebugPerformanceCounter dbg;
+		dbg.start()
 		
 		this.callThat().pMember2 = OuterClass.new( this.pMember1 > 8 if "String literal" else this.toString(), not arg2 )
 		OuterClass.isATest( 28, 9 )

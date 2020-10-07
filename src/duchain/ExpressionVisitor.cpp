@@ -27,13 +27,14 @@ using namespace KDevelop;
 namespace DragonScript {
 
 ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator,
-	const DUContext *ctx, const QVector<const TopDUContext*> &reachableContexts,
-	const CursorInRevision cursorOffset ) :
+	const DUContext *ctx, const QVector<const TopDUContext*> &pinnedNamespaces,
+	TypeFinder &typeFinder, const CursorInRevision cursorOffset ) :
 DynamicLanguageExpressionVisitor( ctx ),
 pEditor( editorIntegrator ),
 pCursorOffset( cursorOffset ),
+pTypeFinder( typeFinder ),
 pIsTypeName( false ),
-pReachableContexts( reachableContexts )
+pPinnedNamespaces( pinnedNamespaces )
 {
 	Q_ASSERT( m_context );
 	Q_ASSERT( m_context->topContext() );
@@ -65,7 +66,7 @@ const DUContext *ExpressionVisitor::lastContext() const{
 	}
 	
 	// find context for type. this is a mess and needs trial and error
-	DUContext *ctx = Helpers::contextForType( *topContext(), m_lastType, pReachableContexts );
+	DUContext *ctx = pTypeFinder.contextFor( m_lastType );
 	if( ctx ){
 		return ctx;
 	}
@@ -85,24 +86,24 @@ const DUContext *ExpressionVisitor::lastContext() const{
 void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 	switch( pEditor.session().tokenStream()->at( node->value ).kind ){
 	case TokenType::Token_LITERAL_BYTE:
-		encounterInternalType( Helpers::getTypeByte() );
+		encounterInternalType( pTypeFinder.typeByte() );
 		break;
 		
 	case TokenType::Token_LITERAL_INTEGER:
-		encounterInternalType( Helpers::getTypeInt() );
+		encounterInternalType( pTypeFinder.typeInt() );
 		break;
 		
 	case TokenType::Token_LITERAL_FLOAT:
-		encounterInternalType( Helpers::getTypeFloat() );
+		encounterInternalType( pTypeFinder.typeFloat() );
 		break;
 		
 	case TokenType::Token_LITERAL_STRING:
-		encounterInternalType( Helpers::getTypeString() );
+		encounterInternalType( pTypeFinder.typeString() );
 		break;
 		
 	case TokenType::Token_TRUE:
 	case TokenType::Token_FALSE:
-		encounterInternalType( Helpers::getTypeBool() );
+		encounterInternalType( pTypeFinder.typeBool() );
 		break;
 		
 	case TokenType::Token_NULL:
@@ -118,7 +119,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		}break;
 		
 	case TokenType::Token_SUPER:{
-		ClassDeclaration * const d = Helpers::superClassDeclFor( *m_context, pReachableContexts );
+		ClassDeclaration * const d = Helpers::superClassDeclFor( *m_context, pTypeFinder );
 		if( d ){
 			encounterDecl( *d );
 		}
@@ -159,7 +160,7 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 			if( searchContext ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
-					*searchContext, useReachable, pReachableContexts );
+					*searchContext, useReachable ? pPinnedNamespaces : QVector<const TopDUContext*>(), pTypeFinder );
 			}
 			
 			if( ! decl ){
@@ -194,7 +195,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		// base object is a type so find an inner type
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		Declaration * const decl = Helpers::declarationForName( identifier,
-			pCursorOffset + pEditor.findPosition( *node->name ), *ctx, true, pReachableContexts );
+			pCursorOffset + pEditor.findPosition( *node->name ), *ctx, pPinnedNamespaces, pTypeFinder );
 		
 		if( decl ){
 			encounterDecl( *decl );
@@ -230,7 +231,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		if( ctx ){
 			declarations = Helpers::declarationsForName( identifier,
 				pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-				*ctx, false, pReachableContexts );
+				*ctx, {}, pTypeFinder );
 		}
 		
 		if( declarations.isEmpty() ){
@@ -244,7 +245,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
 							pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-							*ctx, true, pReachableContexts );
+							*ctx, pPinnedNamespaces, pTypeFinder );
 					}
 				}
 			}
@@ -288,7 +289,7 @@ void ExpressionVisitor::visitExpressionAddition( ExpressionAdditionAst *node ){
 }
 
 void ExpressionVisitor::visitExpressionBlock( ExpressionBlockAst* ){
-	encounterInternalType( Helpers::getTypeBlock() );
+	encounterInternalType( pTypeFinder.typeBlock() );
 }
 
 void ExpressionVisitor::visitExpressionAssign( ExpressionAssignAst *node ){
@@ -334,7 +335,7 @@ void ExpressionVisitor::visitExpressionCompare( ExpressionCompareAst *node ){
 
 void ExpressionVisitor::visitExpressionLogic( ExpressionLogicAst *node ){
 	if( node->moreSequence ){
-		encounterInternalType( Helpers::getTypeBool() ); // always bool
+		encounterInternalType( pTypeFinder.typeBool() ); // always bool
 		
 	}else{
 		clearVisitNode( node->left ); // fall-through
@@ -398,11 +399,12 @@ void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			if( ! ctx || ! clearVisitNode( iter->element->type ) ){
 				return;
 			}
+			pIsTypeName = false;
 			}break;
 			
 		case TokenType::Token_CASTABLE:
 		case TokenType::Token_TYPEOF:
-			encounterInternalType( Helpers::getTypeBool() );
+			encounterInternalType( pTypeFinder.typeBool() );
 			break;
 			
 		default:
@@ -492,10 +494,9 @@ void ExpressionVisitor::encounterDecl( Declaration &decl ){
 	pIsTypeName = false;
 }
 
-void ExpressionVisitor::encounterInternalType( const QualifiedIdentifier &identifier ){
-	Declaration * const decl = Helpers::getInternalTypeDeclaration( *topContext(), identifier, pReachableContexts );
-	if( decl ){
-		encounterDecl( *decl );
+void ExpressionVisitor::encounterInternalType( ClassDeclaration *classDecl ){
+	if( classDecl ){
+		encounterDecl( *classDecl );
 		
 	}else{
 		encounterUnknown();
@@ -517,7 +518,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	
 	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
 	declarations = Helpers::declarationsForName( IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, false, pReachableContexts );
+		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, {}, pTypeFinder );
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();
@@ -535,7 +536,7 @@ const QVector<AbstractType::Ptr> &signature ){
 	
 	// find functions matching with auto-casting
 	const QVector<ClassFunctionDeclaration*> possibleFunctions(
-		Helpers::autoCastableFunctions( *topContext(), signature, declarations, pReachableContexts ) );
+		Helpers::autoCastableFunctions( signature, declarations, pTypeFinder ) );
 	if( ! possibleFunctions.isEmpty() ){
 		useFunction = possibleFunctions.first();
 		if( useFunction ){

@@ -21,6 +21,7 @@
 #include "duchainexport.h"
 #include "EditorIntegrator.h"
 #include "Helpers.h"
+#include "TypeFinder.h"
 
 
 using namespace KDevelop;
@@ -38,13 +39,15 @@ class KDEVDSDUCHAIN_EXPORT PinNamespaceVisitor : public DefaultVisitor {
 private:
 	const EditorIntegrator &pEditorIntegrator;
 	const DUContext *pContext;
+	TypeFinder &pTypeFinder;
 	
 	QVector<DUContext*> pNamespaces;
 	
 	
 	
 public:
-	PinNamespaceVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx );
+	PinNamespaceVisitor( const EditorIntegrator &editorIntegrator,
+		const DUContext *ctx, TypeFinder &typeFinder );
 	
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;
 	

@@ -10,6 +10,7 @@
 #include "dsp_tokenstream.h"
 
 #include "ImportPackage.h"
+#include "TypeFinder.h"
 
 
 using namespace KDevelop;
@@ -21,17 +22,17 @@ using KTextEditor::View;
 namespace DragonScript {
 
 /**
- * \brief Code completion context.
+ * Code completion context.
  */
 class KDEVDSCODECOMPLETION_EXPORT DSCodeCompletionContext : public CodeCompletionContext{
 public:
-	/** \brief Create code completion context. */
+	/** Create code completion context. */
 	DSCodeCompletionContext( DUContextPointer context, const QString& contextText,
 		const QString& followingText, const CursorInRevision& position, int depth,
 		const QUrl &document );
 	
 	/**
-	 * \brief Extract the last full expression from the string.
+	 * Extract the last full expression from the string.
 	 * 
 	 * Usually the last expression is the last line in the text but can be the last N lines
 	 * in the text if line splicing is used.
@@ -39,7 +40,7 @@ public:
 	QString extractLastExpression( const QString &string ) const;
 	
 	/**
-	 * \brief Request completion items.
+	 * Request completion items.
 	 */
 	QList<CompletionTreeItemPointer> completionItems( bool &abort, bool fullCompletion = true ) override;
 	
@@ -50,58 +51,62 @@ public:
 	QList<CompletionTreeElementPointer> ungroupedElements() override;
 	
 	/**
-	 * \brief Add grouped element.
+	 * Add grouped element.
 	 */
 	void addItemGroup( const CompletionTreeElementPointer& group );
 	
 	/**
-	 * \brief Returns true if text ends inside a string or comment.
+	 * Returns true if text ends inside a string or comment.
 	 */
 	bool textEndsInsideCommentOrString( const QString &text ) const;
 	
 	/**
-	 * \brief Tokenize text into token stream.
+	 * Tokenize text into token stream.
 	 */
 	void tokenizeText( const QString &expression );
 	
 	/**
-	 * \brief Log content token stream to debug output.
+	 * Log content token stream to debug output.
 	 */
 	void debugLogTokenStream( const QString &prefix = "DSCodeCompletionContext.tokenStream:" ) const;
 	
 	
 	
-	/** \brief Completion text before the cursor. */
+	/** Completion text before the cursor. */
 	inline const QString &text() const{ return m_text; }
 	
-	/** \brief Document. */
+	/** Document. */
 	inline const QUrl &document() const{ return pDocument; }
 	
-	/** \brief Completion position in document. */
+	/** Completion position in document. */
 	inline const CursorInRevision &position() const{ return pPosition; }
 	
-	/** \brief The full text leading up to the last separation token ("." for example). */
+	/** The full text leading up to the last separation token ("." for example). */
 	inline const QString &getFullText() const{ return pFullText; }
 	
-	/** \brief The text following after the last separation token (partial member name for example). */
+	/** The text following after the last separation token (partial member name for example). */
 	inline const QString &getFollowingText() const{ return pFollowingText; }
 	
-	/** \brief Token stream. */
+	/** Token stream. */
 	inline TokenStream &tokenStream(){ return pTokenStream; }
 	
-	/** \brief Token stream text. */
+	/** Token stream text. */
 	inline const QByteArray &tokenStreamText() const{ return pTokenStreamText; }
 	
-	/** \brief Project files. */
+	/** Project files. */
 	inline const QSet<IndexedString> &projectFiles() const{ return pProjectFiles; }
 	
-	/** \brief Reachable contexts. */
-	inline const QVector<const TopDUContext*> &reachableContexts() const{ return pReachableContexts; }
+	/** Reachable contexts. */
+	inline const QVector<const TopDUContext*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
+	
+	/** Type finder. */
+	inline TypeFinder &typeFinder(){ return pTypeFinder; }
 	
 	
 	
 protected:
 	void findReachableContexts();
+	void preparePackage( ImportPackage &package );
 	
 	
 	
@@ -123,7 +128,8 @@ private:
 	
 	QList<CompletionTreeElementPointer> pItemGroups;
 	
-	QVector<const TopDUContext*> pReachableContexts;
+	TypeFinder pTypeFinder;
+	QVector<const TopDUContext*> pPinnedNamespaces;
 };
 
 }

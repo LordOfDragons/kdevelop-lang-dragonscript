@@ -27,13 +27,12 @@ private:
 	bool pAllowVoidType;
 	bool pCanBeType;
 	bool pAutoThis;
-	const QVector<ReferencedTopDUContext> &pNeighborContexts;
+	Declaration *pIgnoreVariable;
 	
 	
 	
 public:
-	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps,
-		const QVector<ReferencedTopDUContext> &neightborContexts );
+	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinder );
 	
 	/** Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }
@@ -66,6 +65,7 @@ protected:
 	void visitExpressionUnary( ExpressionUnaryAst *node ) override;
 	void visitExpressionInlineIfElse( ExpressionInlineIfElseAst *node ) override;
 	void visitStatementFor( StatementForAst *node ) override;
+	void visitStatementVariableDefinitions( StatementVariableDefinitionsAst *node ) override;
 	
 	/**
 	 * Get context at position or current content.
@@ -112,16 +112,6 @@ protected:
 	 * \note Internally locks \em DUChainWriteLocker.
 	 */
 	void reportSemanticHint( const RangeInRevision &range, const QString &hint );
-	
-	
-	
-private:
-	inline int& nextUseIndex(){
-		return m_nextUseStack.top();
-	}
-	QStack<int> m_nextUseStack;
-	
-	QVector<IndexedString> m_ignoreVariables;
 };
 
 }

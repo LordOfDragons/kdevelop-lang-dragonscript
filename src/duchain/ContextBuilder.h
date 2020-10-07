@@ -18,6 +18,7 @@ using namespace KDevelop;
 namespace DragonScript{
 
 class EditorIntegrator;
+class TypeFinder;
 
 typedef AbstractContextBuilder<AstNode, IdentifierAst> ContextBuilderBase;
 
@@ -31,24 +32,28 @@ private:
 	EditorIntegrator *pEditor = nullptr;
 	int pNamespaceContextCount = 0;
 	QSet<ImportPackage::Ref> pDependencies;
-	QVector<const TopDUContext*> pReachableContexts;
+	QVector<const TopDUContext*> pPinnedNamespaces;
 	bool pRequiresRebuild = false;
 	int pReparsePriority = 0;
 	QSet<IndexedString> pWaitForFiles;
+	TypeFinder *pTypeFinder = nullptr;
 	
 	
 	
 public:
 	ContextBuilder() = default;
 	
-	EditorIntegrator *editor() const{ return pEditor; }
+	inline EditorIntegrator *editor() const{ return pEditor; }
 	void setEditor( EditorIntegrator *editor );
+	
+	inline TypeFinder *typeFinder() const{ return pTypeFinder; }
+	void setTypeFinder( TypeFinder *typeFindef );
 	
 	inline const QSet<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
 	void setDependencies( const QSet<ImportPackage::Ref> &deps );
 	
-	inline QVector<const TopDUContext*> &reachableContexts(){ return pReachableContexts; }
-	inline const QVector<const TopDUContext*> &reachableContexts() const{ return pReachableContexts; }
+	inline QVector<const TopDUContext*> &pinnedNamespaces(){ return pPinnedNamespaces; }
+	inline const QVector<const TopDUContext*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
 	
 	inline bool requiresRebuild() const{ return pRequiresRebuild; }
 	void setRequiresRebuild( bool failed );
@@ -60,6 +65,8 @@ public:
 	inline const QSet<IndexedString> &waitForFiles() const{ return pWaitForFiles; }
 	
 	void startVisiting( AstNode *node ) override;
+	
+	void preparePackage( ImportPackage &package );
 	
 	/** \brief Close namespace contexts. */
 	void closeNamespaceContexts();
@@ -89,6 +96,7 @@ public:
 	void openContextEnumeration( EnumerationAst *node );
 	void openContextClassFunction( ClassFunctionDeclareAst *node );
 	void openContextInterfaceFunction( InterfaceFunctionDeclareAst *node );
+	void pinNamespace( PinAst *node );
 	
 	/*
 	void visitNamespace( NamespaceAst *node ) override;

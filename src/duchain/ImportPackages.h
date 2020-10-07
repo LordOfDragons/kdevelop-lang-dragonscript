@@ -1,7 +1,7 @@
 #ifndef IMPORTPACKAGES_H
 #define IMPORTPACKAGES_H
 
-#include <QMap>
+#include <QHash>
 #include <QMutex>
 #include <QString>
 #include <QVector>
@@ -21,7 +21,7 @@ namespace DragonScript {
 class ImportPackages{
 private:
 	QMutex pMutex;
-	QMap<QString, ImportPackage::Ref> pPackages;
+	QHash<QString, ImportPackage::Ref> pPackages;
 	
 	
 	

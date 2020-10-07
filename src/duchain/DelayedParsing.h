@@ -1,7 +1,7 @@
 #ifndef DELAYEDPARSING_H
 #define DELAYEDPARSING_H
 
-#include <QMap>
+#include <QHash>
 #include <QSet>
 #include <QSharedPointer>
 #include <QMutex>
@@ -81,12 +81,12 @@ public:
 	/**
 	 * Waiter map type.
 	 */
-	typedef QMap<IndexedString, ScheduleParametersReference> WaiterMap;
+	typedef QHash<IndexedString, ScheduleParametersReference> WaiterMap;
 	
 	/**
 	 * Dependency map type.
 	 */
-	typedef QMap<IndexedString, WaiterMap> DependencyMap;
+	typedef QHash<IndexedString, WaiterMap> DependencyMap;
 	
 	/**
 	 * File set.

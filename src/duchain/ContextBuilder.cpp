@@ -8,6 +8,7 @@
 #include "ContextBuilder.h"
 #include "EditorIntegrator.h"
 #include "Helpers.h"
+#include "TypeFinder.h"
 #include "ImportPackageLanguage.h"
 #include "ImportPackageDragengine.h"
 #include "ImportPackageDirectory.h"
@@ -20,6 +21,10 @@ namespace DragonScript{
 
 void ContextBuilder::setEditor( EditorIntegrator *editor ){
 	pEditor = editor;
+}
+
+void ContextBuilder::setTypeFinder( TypeFinder *typeFinder ){
+	pTypeFinder = typeFinder;
 }
 
 void ContextBuilder::setDependencies( const QSet<ImportPackage::Ref> &deps ){
@@ -35,44 +40,53 @@ void ContextBuilder::setReparsePriority( int priority ){
 }
 
 void ContextBuilder::startVisiting( AstNode *node ){
+	if( ! pTypeFinder ){
+		return;
+	}
+	
 // 	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
-	// add depdencies as imports
-	if( ! dependencies().isEmpty() ){
+	if( ! pDependencies.isEmpty() ){
 		DUChainWriteLocker lock;
-		TopDUContext * const top = topContext();
-		QVector<QPair<TopDUContext*, CursorInRevision>> imports;
-		
-		foreach( const ImportPackage::Ref &each, dependencies() ){
-// 			qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
-			
-			ImportPackage::State state;
-			each->contexts( state );
-			if( state.ready ){
-				foreach( TopDUContext *each, state.importContexts ){
-					imports.append( qMakePair( each, CursorInRevision( 1, 0 ) ) );
-				}
-				
-			}else{
-// 				qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
-// 					<< each->name() << " as import for" << document();
-				pRequiresRebuild = true;
-				pReparsePriority = qMax( pReparsePriority, state.reparsePriority );
-				pWaitForFiles.unite( state.waitForFiles );
-// 				return;
-			}
+		foreach( const ImportPackage::Ref &each, pDependencies ){
+			preparePackage( *each );
 		}
 		
 		if( pRequiresRebuild ){
 			return;
 		}
-		
-		top->addImportedParentContexts( imports );
 	}
 	
 	// visit node to start building
 	visitNode( node );
 	closeNamespaceContexts();
 // 	qDebug() << "KDevDScript: ContextBuilder::startVisiting finished";
+}
+
+void ContextBuilder::preparePackage( ImportPackage &package ){
+// 	TopDUContext * const top = topContext();
+	
+//	qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
+	
+	ImportPackage::State state;
+	package.contexts( state );
+	if( state.ready ){
+		foreach( TopDUContext *each, state.importContexts ){
+			pTypeFinder->searchContexts() << each;
+		}
+		
+	}else{
+// 		qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
+// 			<< each->name() << " as import for" << document();
+		pRequiresRebuild = true;
+		pReparsePriority = qMax( pReparsePriority, state.reparsePriority );
+		pWaitForFiles.unite( state.waitForFiles );
+// 		return;
+	}
+	
+	const QSet<ImportPackage::Ref> &dependsOn = package.dependsOn();
+	foreach( const ImportPackage::Ref &dependency, dependsOn ){
+		preparePackage( *dependency );
+	}
 }
 
 void ContextBuilder::setContextOnNode( AstNode *node, DUContext *context ){
@@ -209,6 +223,42 @@ void ContextBuilder::openContextInterfaceFunction( InterfaceFunctionDeclareAst *
 	}else if( node->begin->op ){
 		currentContext()->setLocalScopeIdentifier( identifierForToken( node->begin->op->op ) );
 	}
+}
+
+void ContextBuilder::pinNamespace( PinAst *node ){
+	if( ! node->name->nameSequence ){
+		return;
+	}
+	
+	/*
+	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
+	QList<IdentifierAst*, QualifiedIdentifier>> components;
+	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	QualifiedIdentifier identifier;
+	
+	do{
+		identifier += Identifier( editor()->tokenText( *iter->element ) );
+		components.insert( 0, QPair<IdentifierAst*, QualifiedIdentifier>( iter->element, identifier ) );
+		iter = iter->next;
+	}while( iter != end );
+	
+	// dragonscript allows searching in parent namespaces of pinned namespaces.
+	// to get this working we need an alias definition for the pinned namespace
+	// as well as for all parent namespaces. to get the right search order the
+	// alias definitions have to be done in reverse order
+	QList<QPair<IdentifierAst*, QualifiedIdentifier>>::const_iterator iterAlias;
+	for( iterAlias = aliases.cbegin(); iterAlias != aliases.cend(); iterAlias++ ){
+		const RangeInRevision range( editorFindRangeNode( iterAlias->first ) );
+		NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
+			globalImportIdentifier(), range, DeclarationFlags::NoFlags );
+		eventuallyAssignInternalContext();
+		decl->setKind( Declaration::NamespaceAlias );
+		decl->setImportIdentifier( iterAlias->second );
+		decl->setIdentifier( iterAlias->second.last() );
+		decl->setInternalContext( openContext( iter->element, range, DUContext::Namespace, iterAlias->second ) );
+		closeContext();
+	}
+	*/
 }
 
 }

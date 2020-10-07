@@ -26,9 +26,11 @@ using namespace KDevelop;
 
 namespace DragonScript {
 
-PinNamespaceVisitor::PinNamespaceVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx ) :
+PinNamespaceVisitor::PinNamespaceVisitor( const EditorIntegrator &editorIntegrator,
+	const DUContext *ctx, TypeFinder &typeFinder ) :
 pEditorIntegrator( editorIntegrator ),
-pContext( ctx )
+pContext( ctx ),
+pTypeFinder( typeFinder )
 {
 	Q_ASSERT( ctx );
 	Q_ASSERT( ctx->topContext() );
@@ -65,7 +67,7 @@ const QVector<IdentifierAst*> nodes, const QVector<QString> &names, int index ){
 // 		names.at( index ), CursorInRevision::invalid() ) );
 	const IndexedIdentifier identifier( Identifier( names.at( index ) ) );
 	QVector<Declaration*> declarations( Helpers::declarationsForName( identifier,
-		CursorInRevision::invalid(), *searchContext, false, {} ) );
+		CursorInRevision::invalid(), *searchContext, {}, pTypeFinder ) );
 	
 // 	qDebug() << "PinNamespaceVisitor::findNamespaceIn:" << names.at( index ) << "found" << declarations;
 	if( declarations.isEmpty() ){

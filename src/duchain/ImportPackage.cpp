@@ -103,6 +103,24 @@ void ImportPackage::contexts( State &state ){
 	}
 }
 
+QSet<TopDUContext*> ImportPackage::deepAllContexts(){
+	DUChain &duchain = *DUChain::self();
+	QSet<TopDUContext*> list;
+	
+	foreach( const IndexedString &file, pFiles ){
+		TopDUContext * const context = duchain.chainForDocument( file );
+		if( context ){
+			list << context;
+		}
+	}
+	
+	foreach( const ImportPackage::Ref &package, pDependsOn ){
+		list.unite( package->deepAllContexts() );
+	}
+	
+	return list;
+}
+
 int ImportPackage::dependencyDepth() const{
 	int depth = 0;
 	

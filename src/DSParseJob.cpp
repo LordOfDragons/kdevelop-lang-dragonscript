@@ -62,13 +62,6 @@ pStartAst( nullptr )
 	}
 }
 
-DSParseJob::~DSParseJob(){
-	if( ! pNeighborContexts.isEmpty() ){
-		DUChainWriteLocker lock;
-		pNeighborContexts.clear();
-	}
-}
-
 void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *thread ){
 	Q_UNUSED(self)
 	Q_UNUSED(thread)
@@ -331,11 +324,6 @@ bool DSParseJob::allFilesRequiredPhase(){
 		return true;
 	}
 	
-	{
-	DUChainWriteLocker lock;
-	pNeighborContexts.clear();
-	}
-	
 	DUChainReadLocker lock;
 	QSet<IndexedString> files;
 	
@@ -350,6 +338,8 @@ bool DSParseJob::allFilesRequiredPhase(){
 	DUChain &duchain = *DUChain::self();
 	const int minPhase = pPhase - 1;
 	bool allPassed = true;
+	
+	pTypeFinder.searchContexts() << duchain.chainForDocument( document() );
 	
 	foreach( const IndexedString &file, files ){
 		if( file == document() ){
@@ -405,7 +395,7 @@ bool DSParseJob::allFilesRequiredPhase(){
 			//return false;
 		}
 		
-		pNeighborContexts << context;
+		pTypeFinder.searchContexts() << context;
 	}
 	
 	return allPassed;
@@ -510,7 +500,7 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 		duChain()->clearProblems();
 	}
 	
-	DeclarationBuilder builder( editor, editor.session(), pDependencies, pNeighborContexts, pPhase );
+	DeclarationBuilder builder( editor, editor.session(), pDependencies, pTypeFinder, pPhase );
 	setDuChain( builder.build( document(), pStartAst, duChain() ) );
 	
 // 	DumpChain().dump( duChain() );
@@ -525,7 +515,7 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 
 bool DSParseJob::buildUses( EditorIntegrator &editor ){
 	// gather uses of variables and functions on the document
-	UseBuilder builder( editor, pDependencies, pNeighborContexts );
+	UseBuilder builder( editor, pDependencies, pTypeFinder );
 	builder.buildUses( pStartAst );
 	
 	if( builder.requiresRebuild() ){

@@ -20,6 +20,7 @@
 #include "duchainexport.h"
 #include "EditorIntegrator.h"
 #include "Helpers.h"
+#include "TypeFinder.h"
 
 
 using namespace KDevelop;
@@ -41,6 +42,7 @@ public DynamicLanguageExpressionVisitor
 private:
 	const EditorIntegrator &pEditor;
 	const CursorInRevision pCursorOffset;
+	TypeFinder &pTypeFinder;
 	
 	/** \brief Void type is allowed. */
 	bool pAllowVoid = false;
@@ -57,13 +59,13 @@ private:
 	
 	bool pIsTypeName;
 	
-	const QVector<const TopDUContext*> &pReachableContexts;
+	const QVector<const TopDUContext*> &pPinnedNamespaces;
 	
 	
 	
 public:
 	ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx,
-		const QVector<const TopDUContext*> &reachableContexts,
+		const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder,
 		const CursorInRevision cursorOffset = CursorInRevision( 0, 0 ) );
 	
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
@@ -128,7 +130,7 @@ protected:
 	
 	/** \brief Simplify common calls. */
 	void encounterDecl( Declaration &decl );
-	void encounterInternalType( const QualifiedIdentifier &identifier );
+	void encounterInternalType( ClassDeclaration *classDecl );
 	
 	/** \brief Check function call. */
 	void checkFunctionCall( AstNode &node, const DUContext &context, const AbstractType::Ptr &argument );

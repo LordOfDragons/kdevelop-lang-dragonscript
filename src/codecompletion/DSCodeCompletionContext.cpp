@@ -19,6 +19,8 @@
 #include "ExpressionVisitor.h"
 #include "DumpChain.h"
 #include "TokenText.h"
+#include "ImportPackageLanguage.h"
+#include "ImportPackageDragengine.h"
 #include "../DSLanguageSupport.h"
 
 
@@ -242,8 +244,6 @@ void DSCodeCompletionContext::findReachableContexts(){
 	DUChainReadLocker lock;
 	QSet<IndexedString> files;
 	
-	pReachableContexts.clear();
-	
 	if( pPackage ){
 		files.unite( pPackage->files() );
 		
@@ -253,6 +253,8 @@ void DSCodeCompletionContext::findReachableContexts(){
 	
 	const DUChain &duchain = *DUChain::self();
 	
+	pTypeFinder.searchContexts() << duchain.chainForDocument( pIndexDocument );
+	
 	foreach( const IndexedString &file, files ){
 		if( file == pIndexDocument ){
 			continue;
@@ -260,8 +262,34 @@ void DSCodeCompletionContext::findReachableContexts(){
 		
 		TopDUContext * const context = duchain.chainForDocument( file );
 		if( context ){
-			pReachableContexts << context;
+			pTypeFinder.searchContexts() << context;
 		}
+	}
+	
+	if( pPackage ){
+		foreach( const ImportPackage::Ref &depend, pPackage->dependsOn() ){
+			preparePackage( *depend );
+		}
+		
+	}else{
+		preparePackage( *ImportPackageLanguage::self() );
+		preparePackage( *ImportPackageDragengine::self() );
+	}
+}
+
+void DSCodeCompletionContext::preparePackage( ImportPackage &package ){
+	DUChain &duchain = *DUChain::self();
+	
+	foreach( const IndexedString &file, package.files() ){
+		TopDUContext * const context = duchain.chainForDocument( file );
+		if( context ){
+			pTypeFinder.searchContexts() << context;
+		}
+	}
+	
+	const QSet<ImportPackage::Ref> &dependsOn = package.dependsOn();
+	foreach( const ImportPackage::Ref &dependency, dependsOn ){
+		preparePackage( *dependency );
 	}
 }
 

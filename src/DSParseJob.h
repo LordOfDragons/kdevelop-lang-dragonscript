@@ -14,6 +14,7 @@
 #include "DSProjectSettings.h"
 #include "dsp_ast.h"
 #include "ImportPackage.h"
+#include "TypeFinder.h"
 
 
 using namespace KDevelop;
@@ -52,7 +53,6 @@ public:
 	
 	
 	explicit DSParseJob( const IndexedString &url, ILanguageSupport *languageSupport );
-	~DSParseJob() override;
 	
 	void setParentJob( DSParseJob *job );
 	
@@ -80,10 +80,10 @@ private:
 	DSParseJob *pParentJob; ///< parent job if this one is an include
 	DSProjectSettings pProjectSettings;
 	StartAst *pStartAst;
+	TypeFinder pTypeFinder;
 	ImportPackage::Ref pPackage;
 	QSet<ImportPackage::Ref> pDependencies;
 	QSet<IndexedString> pProjectFiles;
-	QVector<ReferencedTopDUContext> pNeighborContexts;
 	QStringList pProjectIncludePath;
 	int pReparsePriority;
 	QSet<IndexedString> pWaitForFiles;

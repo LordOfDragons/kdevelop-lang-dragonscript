@@ -34,6 +34,7 @@
 #include "Helpers.h"
 #include "ExpressionVisitor.h"
 #include "ImportPackageLanguage.h"
+#include "TypeFinder.h"
 
 
 using namespace KDevelop;
@@ -60,12 +61,6 @@ const IndexedIdentifier Helpers::pNameConstructor( Identifier( "new" ) );
 
 
 
-DUContext *Helpers::contextForType( const TopDUContext &top, const AbstractType::Ptr &type,
-const QVector<const TopDUContext*> &reachableContexts ){
-	const ClassDeclaration * const classDecl = classDeclFor( top, type, reachableContexts );
-	return classDecl ? classDecl->internalContext() : nullptr;
-}
-
 ClassDeclaration *Helpers::thisClassDeclFor( const DUContext &context ){
 	const DUContext *findContext = &context;
 	while( findContext ){
@@ -78,20 +73,18 @@ ClassDeclaration *Helpers::thisClassDeclFor( const DUContext &context ){
 	return nullptr;
 }
 
-ClassDeclaration *Helpers::superClassDeclFor( const DUContext &context,
-const QVector<const TopDUContext*> &reachableContexts ){
+ClassDeclaration *Helpers::superClassDeclFor( const DUContext &context, TypeFinder &typeFinder ){
 	ClassDeclaration * const decl = thisClassDeclFor( context );
 	if( ! decl || ! context.parentContext() ){
 		return nullptr;
 	}
 	
-	const TopDUContext * const topContext = context.topContext();
-	const ClassDeclaration * const classDecl = static_cast<const ClassDeclaration*>( decl );
-	if( ! topContext || ! classDecl ){
+	const ClassDeclaration * const classDecl = dynamic_cast<const ClassDeclaration*>( decl );
+	if( ! classDecl ){
 		return nullptr;
 	}
 	
-	return superClassOf( *topContext, *classDecl, reachableContexts );
+	return superClassOf( *classDecl, typeFinder );
 }
 
 ClassDeclaration *Helpers::classDeclFor( const DUContext &context ){
@@ -106,46 +99,21 @@ ClassDeclaration *Helpers::classDeclFor( const DUContext *context ){
 	return context ? classDeclFor( *context ) : nullptr;
 }
 
-ClassDeclaration *Helpers::classDeclFor( const TopDUContext &top, const AbstractType::Ptr &type,
-const QVector<const TopDUContext*> &reachableContexts ){
-	StructureType::Ptr structType = type.cast<StructureType>();
-	if( ! structType ){
-		return nullptr;
-	}
-	
-	Declaration *declType = structType->declaration( &top );
-	if( ! declType ){
-		foreach( const TopDUContext *each, reachableContexts ){
-			declType = structType->declaration( each );
-			if( declType ){
-				break;
-			}
-		}
-	}
-	if( ! declType ){
-		return nullptr;
-	}
-	
-	return static_cast<ClassDeclaration*>( declType );
-}
-
-ClassDeclaration *Helpers::superClassOf( const TopDUContext &top,
-const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts ){
+ClassDeclaration *Helpers::superClassOf( const ClassDeclaration &declaration, TypeFinder &typeFinder ){
 	if( declaration.baseClassesSize() == 0 ){
 		return nullptr;
 	}
 	
-	return classDeclFor( top, declaration.baseClasses()[ 0 ].baseClass.abstractType(), reachableContexts );
+	return typeFinder.declarationFor( declaration.baseClasses()[ 0 ].baseClass.abstractType() );
 }
 
-QVector<ClassDeclaration*> Helpers::implementsOf( const TopDUContext &top, const
-ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts ){
+QVector<ClassDeclaration*> Helpers::implementsOf( const ClassDeclaration &declaration, TypeFinder &typeFinder ){
 	QVector<ClassDeclaration*> implements;
 	uint i;
 	
 	for( i=1; i<declaration.baseClassesSize(); i++ ){
-		ClassDeclaration * const implementDecl = classDeclFor( top,
-			declaration.baseClasses()[ i ].baseClass.abstractType(), reachableContexts );
+		ClassDeclaration * const implementDecl = typeFinder.declarationFor(
+			declaration.baseClasses()[ i ].baseClass.abstractType() );
 		if( implementDecl ){
 			implements.append( implementDecl );
 		}
@@ -154,14 +122,13 @@ ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableCont
 	return implements;
 }
 
-QVector<ClassDeclaration*> Helpers::baseClassesOf( const TopDUContext &top,
-const ClassDeclaration &declaration, const QVector<const TopDUContext*> &reachableContexts ){
+QVector<ClassDeclaration*> Helpers::baseClassesOf( const ClassDeclaration &declaration, TypeFinder &typeFinder ){
 	QVector<ClassDeclaration*> baseClasses;
 	uint i;
 	
 	for( i=0; i<declaration.baseClassesSize(); i++ ){
-		ClassDeclaration * const baseClassDecl = classDeclFor( top,
-			declaration.baseClasses()[ i ].baseClass.abstractType(), reachableContexts );
+		ClassDeclaration * const baseClassDecl = typeFinder.declarationFor(
+			declaration.baseClasses()[ i ].baseClass.abstractType() );
 		if( baseClassDecl ){
 			baseClasses.append( baseClassDecl );
 		}
@@ -192,8 +159,8 @@ bool Helpers::equalsInternal( const AbstractType::Ptr &type, const QualifiedIden
 	return structType->qualifiedIdentifier() == internal;
 }
 
-bool Helpers::castable( const TopDUContext &top, const AbstractType::Ptr &type,
-const AbstractType::Ptr &targetType, const QVector<const TopDUContext*> &reachableContexts ){
+bool Helpers::castable( const AbstractType::Ptr &type, const AbstractType::Ptr &targetType,
+TypeFinder &typeFinder ){
 	// NOTE pTypeInvalid is considered a wildcard to reduce errors shown to meaningful ones
 	if( type == pTypeInvalid || targetType == pTypeInvalid ){
 		return true;
@@ -214,21 +181,21 @@ const AbstractType::Ptr &targetType, const QVector<const TopDUContext*> &reachab
 	}
 	
 	// test against supper class and interfaces of type1
-	ClassDeclaration * const classDecl = classDeclFor( top, type, reachableContexts );
+	ClassDeclaration * const classDecl = typeFinder.declarationFor( type );
 	if( ! classDecl ){
 		return false;
 	}
 	
-	ClassDeclaration * const superClassDecl = superClassOf( top, *classDecl, reachableContexts );
+	ClassDeclaration * const superClassDecl = superClassOf( *classDecl, typeFinder );
 	if( superClassDecl ){
-		if( castable( top, superClassDecl->abstractType(), targetType, reachableContexts ) ){
+		if( castable( superClassDecl->abstractType(), targetType, typeFinder ) ){
 			return true;
 		}
 	}
 	
-	const QVector<ClassDeclaration*> implements( implementsOf( top, *classDecl, reachableContexts ) );
+	const QVector<ClassDeclaration*> implements( implementsOf( *classDecl, typeFinder ) );
 	foreach( ClassDeclaration* implement, implements ){
-		if( castable( top, implement->abstractType(), targetType, reachableContexts ) ){
+		if( castable( implement->abstractType(), targetType, typeFinder ) ){
 			return true;
 		}
 	}
@@ -278,12 +245,12 @@ const FunctionType::Ptr &func2 ){
 	return true;
 }
 
-bool Helpers::overrides( const TopDUContext &top, const ClassFunctionDeclaration *func1,
-const ClassFunctionDeclaration *func2, const QVector<const TopDUContext*> &reachableContexts ){
+bool Helpers::overrides( const ClassFunctionDeclaration *func1,
+const ClassFunctionDeclaration *func2, TypeFinder &typeFinder ){
 	return func1 && func1->context() && func1->context()->owner()
 		&& func2 && func2->context() && func2->context()->owner()
-		&& castable( top, func1->context()->owner()->abstractType(),
-			func2->context()->owner()->abstractType(), reachableContexts );
+		&& castable( func1->context()->owner()->abstractType(),
+			func2->context()->owner()->abstractType(), typeFinder );
 }
 
 
@@ -306,28 +273,11 @@ IndexedString Helpers::getDocumentationFileEnumeration(){
 	return documentationFileEnumeration;
 }
 
-Declaration *Helpers::getInternalTypeDeclaration( const TopDUContext &top,
-const QualifiedIdentifier &identifier, const QVector<const TopDUContext*> &reachableContexts ){
-	QList<Declaration*> declarations( top.findDeclarations( identifier ) );
-	if( ! declarations.isEmpty() ){
-		return declarations.first();
-	}
-	
-	foreach( const TopDUContext *each, reachableContexts ){
-		declarations = each->findDeclarations( identifier );
-		if( ! declarations.isEmpty() ){
-			return declarations.first();
-		}
-	}
-	
-	return nullptr;
-}
-
 
 
 Declaration *Helpers::declarationForName( const IndexedIdentifier &identifier,
-const CursorInRevision &location, const DUContext &context, bool useReachable,
-const QVector<const TopDUContext*> &reachableContexts ){
+const CursorInRevision &location, const DUContext &context,
+const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder ){
 	QList<Declaration*> declarations;
 	
 	// find declaration in local context up to location
@@ -350,39 +300,38 @@ const QVector<const TopDUContext*> &reachableContexts ){
 	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
 	if( classDecl && classDecl->internalContext() ){
 		Declaration * const foundDeclaration = declarationForNameInBase(
-			identifier, *classDecl->internalContext(), reachableContexts );
+			identifier, *classDecl->internalContext(), typeFinder );
 		if( foundDeclaration ){
 			return foundDeclaration;
 		}
 	}
 	
-	// find declaration in neighbor and pinned contexts
-	if( useReachable ){
-		for( const DUContext *reachable : reachableContexts ){
-			declarations = reachable->findDeclarations( identifier );
-			if( ! declarations.isEmpty() ){
-				return declarations.last();
-			}
+	// find declaration in pinned contexts
+	foreach( const DUContext *pinned, pinnedNamespaces ){
+		declarations = pinned->findDeclarations( identifier );
+		if( ! declarations.isEmpty() ){
+			return declarations.last();
 		}
 	}
 	
-	// nothing found
-	return nullptr;
+	// find declaration in global scope
+	return typeFinder.declarationFor( identifier );
 }
 
 Declaration *Helpers::declarationForNameInBase( const IndexedIdentifier &identifier,
-const DUContext &context, const QVector<const TopDUContext*> &reachableContexts ){
+const DUContext &context, TypeFinder &typeFinder ){
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
 	if( ! classDecl || classDecl->baseClassesSize() == 0 ){
 		return nullptr;
 	}
 	
-	TopDUContext * const topContext = context.topContext();
 	uint i;
-	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
-		DUContext * const baseContext = contextForType( *topContext,
-			classDecl->baseClasses()[ i ].baseClass.abstractType(), reachableContexts );
+		DUContext * const baseContext = typeFinder.contextFor(
+			classDecl->baseClasses()[ i ].baseClass.abstractType() );
+// 		qDebug() << "DEBUG" << classDecl->toString() << i
+// 			<< classDecl->baseClasses()[ i ].baseClass.abstractType()->toString()
+// 			<< (baseContext ? baseContext->scopeIdentifier(true).toString() : "-");
 		if( ! baseContext ){
 			continue;
 		}
@@ -392,8 +341,7 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 			return declarations.last();
 		}
 		
-		Declaration * const foundDeclaration = declarationForNameInBase(
-			identifier, *baseContext, reachableContexts );
+		Declaration * const foundDeclaration = declarationForNameInBase( identifier, *baseContext, typeFinder );
 		if( foundDeclaration ){
 			return foundDeclaration;
 		}
@@ -405,8 +353,8 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 
 
 QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
-const CursorInRevision &location, const DUContext &context, bool useReachable,
-const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
+const CursorInRevision &location, const DUContext &context,
+const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder, bool onlyFunctions ){
 	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
 	QVector<Declaration*> foundDeclarations;
 	QList<Declaration*> declarations;
@@ -425,7 +373,7 @@ const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
 	declarations = context.findDeclarations( identifier, location, nullptr, searchFlags );
 	foreach( Declaration *declaration, declarations ){
 		if( ! foundDeclarations.contains( declaration ) ){
-			foundDeclarations.append( declaration );
+			foundDeclarations << declaration;
 		}
 	}
 	
@@ -433,18 +381,23 @@ const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
 	// closest class declaration up the parent chain
 	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
 	if( classDecl && classDecl->internalContext() ){
-		foundDeclarations.append( declarationsForNameInBase( identifier,
-			*classDecl->internalContext(), reachableContexts, onlyFunctions ) );
+		foundDeclarations << declarationsForNameInBase( identifier,
+			*classDecl->internalContext(), typeFinder, onlyFunctions );
 	}
 	
-	// find declarations in neighbor and pinned contexts
-	if( useReachable ){
-		for( const DUContext *reachable : reachableContexts ){
-			declarations = reachable->findDeclarations( identifier,
-				CursorInRevision::invalid(), nullptr, searchFlags );
-			foreach( Declaration* declaration, declarations ){
-				foundDeclarations.append( declaration );
-			}
+	// find declarations in pinned contexts
+	foreach( const DUContext *pinned, pinnedNamespaces ){
+		declarations = pinned->findDeclarations( identifier, CursorInRevision::invalid(), nullptr, searchFlags );
+		foreach( Declaration* declaration, declarations ){
+			foundDeclarations << declaration;
+		}
+	}
+	
+	// find declaration in global scope
+	if( ! onlyFunctions ){
+		ClassDeclaration * const globalDecl = typeFinder.declarationFor( identifier );
+		if( globalDecl ){
+			foundDeclarations << globalDecl;
 		}
 	}
 	
@@ -452,7 +405,7 @@ const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
-const DUContext &context, const QVector<const TopDUContext*> &reachableContexts, bool onlyFunctions ){
+const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 	QVector<Declaration*> foundDeclarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
@@ -469,24 +422,10 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts,
 	}
 	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
-		const StructureType::Ptr structType( classDecl->baseClasses()[ i ]
-			.baseClass.abstractType().cast<StructureType>() );
-		if( ! structType ){
-			continue;
-		}
-		
-		DUContext *baseContext = structType->internalContext( top );
+		DUContext * const baseContext = typeFinder.contextFor(
+			classDecl->baseClasses()[ i ].baseClass.abstractType() );
 		if( ! baseContext ){
-			foreach( const DUContext *each, reachableContexts ){
-				baseContext = structType->internalContext( each->topContext() );
-				if( baseContext ){
-					break;
-				}
-			}
-			
-			if( ! baseContext ){
-				continue;
-			}
+			continue;
 		}
 		
 		const QList<Declaration*> declarations( baseContext->findDeclarations(
@@ -498,7 +437,7 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts,
 		}
 		
 		foundDeclarations.append( declarationsForNameInBase(
-			identifier, *baseContext, reachableContexts, onlyFunctions ) );
+			identifier, *baseContext, typeFinder, onlyFunctions ) );
 	}
 	
 	return foundDeclarations;
@@ -507,11 +446,9 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts,
 
 
 QVector<QPair<Declaration*, int>> Helpers::allDeclarations( const CursorInRevision& location,
-const DUContext &context, bool useReachable,
-const QVector<const TopDUContext*> &reachableContexts ){
+const DUContext &context, const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder ){
 	// NOTE allDeclarations() is not used since it returns tons of duplicates and
 	//      does not play well with neighbor context searching
-	
 	QVector<QPair<Declaration*, int>> declarations;
 	
 	// find declaration in this context and up the parent chain
@@ -529,30 +466,26 @@ const QVector<const TopDUContext*> &reachableContexts ){
 	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
 	if( classDecl && classDecl->internalContext() ){
 		const QVector<QPair<Declaration*, int>> declList(
-			allDeclarationsInBase( *classDecl->internalContext(), reachableContexts ) );
+			allDeclarationsInBase( *classDecl->internalContext(), typeFinder ) );
 		foreach( auto each, declList ){
 			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
 		}
 	}
 	
-	// find declarations in neighbor and pinned contexts
-	if( useReachable ){
-		for( const DUContext *reachable : reachableContexts ){
-			const QVector<Declaration*> foundDeclarations( reachable->localDeclarations() );
-			foreach( Declaration *each, foundDeclarations){
-				declarations << QPair<Declaration*, int>{ each, 1000 };
-			}
+	// find declarations in pinned contexts
+	foreach( const DUContext *pinned, pinnedNamespaces ){
+		const QVector<Declaration*> foundDeclarations( pinned->localDeclarations() );
+		foreach( Declaration *each, foundDeclarations){
+			declarations << QPair<Declaration*, int>{ each, 1000 };
 		}
 	}
 	
 	return declarations;
 }
 
-QVector<QPair<Declaration*, int>> Helpers::allDeclarationsInBase(
-const DUContext &context, const QVector<const TopDUContext*> &reachableContexts ){
+QVector<QPair<Declaration*, int>> Helpers::allDeclarationsInBase( const DUContext &context, TypeFinder &typeFinder ){
 	// NOTE allDeclarations() is not used since it returns tons of duplicates and
 	//      does not play well with neighbor context searching
-	
 	QVector<QPair<Declaration*, int>> declarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
@@ -560,28 +493,12 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 		return declarations;
 	}
 	
-	TopDUContext * const top = context.topContext();
 	uint i;
-	
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
-		const StructureType::Ptr structType( classDecl->baseClasses()[ i ]
-			.baseClass.abstractType().cast<StructureType>() );
-		if( ! structType ){
-			continue;
-		}
-		
-		DUContext *baseContext = structType->internalContext( top );
+		DUContext * const baseContext = typeFinder.contextFor(
+			classDecl->baseClasses()[ i ].baseClass.abstractType() );
 		if( ! baseContext ){
-			foreach( const DUContext *each, reachableContexts ){
-				baseContext = structType->internalContext( each->topContext() );
-				if( baseContext ){
-					break;
-				}
-			}
-			
-			if( ! baseContext ){
-				continue;
-			}
+			continue;
 		}
 		
 		const QVector<Declaration*> foundDeclarations( baseContext->localDeclarations() );
@@ -589,8 +506,7 @@ const DUContext &context, const QVector<const TopDUContext*> &reachableContexts 
 			declarations << QPair<Declaration*, int>{ each, 0 };
 		}
 		
-		const QVector<QPair<Declaration*, int>> declList(
-			allDeclarationsInBase( *baseContext, reachableContexts ) );
+		const QVector<QPair<Declaration*, int>> declList( allDeclarationsInBase( *baseContext, typeFinder ) );
 		foreach( auto each, declList ){
 			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
 		}
@@ -684,9 +600,9 @@ const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declar
 	return bestMatchingDecl;
 }
 
-QVector<ClassFunctionDeclaration*> Helpers::autoCastableFunctions( const TopDUContext &top,
+QVector<ClassFunctionDeclaration*> Helpers::autoCastableFunctions(
 const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations,
-const QVector<const TopDUContext*> &reachableContexts ){
+TypeFinder &typeFinder ){
 	QVector<ClassFunctionDeclaration*> possibleFunctions;
 	const int argCount = signature.size();
 	int i;
@@ -703,7 +619,7 @@ const QVector<const TopDUContext*> &reachableContexts ){
 		}
 		
 		for( i=0; i<argCount; i++ ){
-			if( ! castable( top, signature.at( i ), funcType->arguments().at( i ), reachableContexts ) ){
+			if( ! castable( signature.at( i ), funcType->arguments().at( i ), typeFinder ) ){
 				break;
 			}
 		}
@@ -719,14 +635,14 @@ const QVector<const TopDUContext*> &reachableContexts ){
 			// if this is a constructor call do not check the return type
 			if( pNameConstructor == declaration->identifier() ){
 				if( sameSignatureAnyReturnType( funcType, checkFuncDecl->type<FunctionType>() )
-				&& overrides( top, checkFuncDecl, funcDecl, reachableContexts ) ){
+				&& overrides( checkFuncDecl, funcDecl, typeFinder ) ){
 					ignoreFunction = true;
 					break;
 				}
 				
 			}else{
 				if( sameSignature( funcType, checkFuncDecl->type<FunctionType>() )
-				&& overrides( top, checkFuncDecl, funcDecl, reachableContexts ) ){
+				&& overrides( checkFuncDecl, funcDecl, typeFinder ) ){
 					ignoreFunction = true;
 					break;
 				}

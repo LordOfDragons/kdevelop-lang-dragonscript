@@ -18,7 +18,7 @@ QVector<ImportPackage::Ref> ImportPackages::packages(){
 
 ImportPackage::Ref ImportPackages::packageNamed( const QString &name ){
 	QMutexLocker lock( &pMutex );
-	QMap<QString, ImportPackage::Ref>::iterator iter( pPackages.find( name ) );
+	QHash<QString, ImportPackage::Ref>::iterator iter( pPackages.find( name ) );
 	if( iter == pPackages.end() ){
 		return {};
 	}
@@ -43,7 +43,7 @@ void ImportPackages::addPackage( const ImportPackage::Ref &package ){
 
 void ImportPackages::reparseNamed( const QString &name ){
 	QMutexLocker lock( &pMutex );
-	QMap<QString, ImportPackage::Ref>::iterator iter( pPackages.find( name ) );
+	QHash<QString, ImportPackage::Ref>::iterator iter( pPackages.find( name ) );
 	if( iter != pPackages.end() ){
 		(*iter)->reparse();
 	}

@@ -14,6 +14,7 @@
 #include "ExpressionVisitor.h"
 #include "PinNamespaceVisitor.h"
 #include "Helpers.h"
+#include "TypeFinder.h"
 #include "../parser/ParseSession.h"
 
 
@@ -21,9 +22,8 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor,
-	const ParseSession &parseSession, const QSet<ImportPackage::Ref> &deps,
-	const QVector<ReferencedTopDUContext> &ncs, int phase ) :
+DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor, const ParseSession &parseSession,
+	const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinderr, int phase ) :
 DeclarationBuilderBase(),
 pParseSession( parseSession ),
 pNamespaceContextCount( 0 ),
@@ -31,9 +31,7 @@ pPhase( phase )
 {
 	setDependencies( deps );
 	setEditor( &editor );
-	foreach( const ReferencedTopDUContext &each, ncs ){
-		reachableContexts() << each.data();
-	}
+	setTypeFinder( &typeFinderr );
 }
 
 DeclarationBuilder::~DeclarationBuilder(){
@@ -177,7 +175,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	if( pPhase > 1 ){
 		if( node->begin->extends ){
 			DUChainReadLocker lock;
-			ExpressionVisitor exprvisitor( *editor(), currentContext(), reachableContexts() );
+			ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 			exprvisitor.visitNode( node->begin->extends );
 			
 			if( exprvisitor.lastType()
@@ -192,12 +190,10 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 		}else if( document() != Helpers::getDocumentationFileObject() ){
 			// set object as base class. this is only done if this is not the object class
 			// from the documentation being parsed
-			DUChainReadLocker lock;
-			Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
-				*topContext(), Helpers::getTypeObject(), reachableContexts() );
-			if( typeDecl && typeDecl->abstractType() ){
+			ClassDeclaration * const typeObject = typeFinder()->typeObject();
+			if( typeObject ){
 				BaseClassInstance base;
-				base.baseClass = typeDecl->abstractType()->indexed();
+				base.baseClass = typeObject->abstractType()->indexed();
 				base.access = Declaration::Public;
 				decl->addBaseClass( base );
 			}
@@ -208,7 +204,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
 			DUChainReadLocker lock;
 			do{
-				ExpressionVisitor exprvisitor( *editor(), currentContext(), reachableContexts() );
+				ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
@@ -255,7 +251,7 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprType( *editor(), currentContext(), reachableContexts() );
+	ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 	exprType.visitNode( node->type );
 	type = exprType.lastType();
 	}
@@ -338,7 +334,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	
 	if( node->begin->type ){
 		DUChainReadLocker lock;
-		ExpressionVisitor exprRetType( *editor(), currentContext(), reachableContexts() );
+		ExpressionVisitor exprRetType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 		exprRetType.setAllowVoid( true );
 		exprRetType.visitNode( node->begin->type );
 		funcType->setReturnType( exprRetType.lastType() );
@@ -369,7 +365,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 			AbstractType::Ptr argType;
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), reachableContexts() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -451,16 +447,12 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	
 	if( pPhase > 1 ){
 		// set object as base class
-		{
-		DUChainReadLocker lock;
-		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
-			*topContext(), Helpers::getTypeObject(), reachableContexts() );
-		if( typeDecl && typeDecl->abstractType() ){
+		ClassDeclaration * const typeObject = typeFinder()->typeObject();
+		if( typeObject ){
 			BaseClassInstance base;
-			base.baseClass = typeDecl->abstractType()->indexed();
+			base.baseClass = typeObject->abstractType()->indexed();
 			base.access = Declaration::Public;
 			decl->addBaseClass( base );
-		}
 		}
 		
 		// add interfaces
@@ -469,7 +461,7 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
 			DUChainReadLocker lock;
 			do{
-				ExpressionVisitor exprvisitor( *editor(), currentContext(), reachableContexts() );
+				ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
@@ -536,7 +528,7 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 	FunctionType::Ptr funcType( new FunctionType() );
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprRetType( *editor(), currentContext(), reachableContexts() );
+	ExpressionVisitor exprRetType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 	exprRetType.setAllowVoid( true );
 	exprRetType.visitNode( node->begin->type );
 	funcType->setReturnType( exprRetType.lastType() );
@@ -552,7 +544,7 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 			AbstractType::Ptr argType;
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), reachableContexts() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -605,18 +597,16 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	// base class. this is only done if this is not the enumeration class from
 	// the documentation being parsed
 	if( pPhase > 1 && document() != Helpers::getDocumentationFileEnumeration() ){
-		DUChainReadLocker lock;
-		Declaration * const typeDecl = Helpers::getInternalTypeDeclaration(
-			*topContext(), Helpers::getTypeEnumeration(), reachableContexts() );
-		if( typeDecl && typeDecl->abstractType() ){
+		ClassDeclaration * const typeEnum = typeFinder()->typeEnumeration();
+		if( typeEnum ){
 			BaseClassInstance base;
-			base.baseClass = typeDecl->abstractType()->indexed();
+			base.baseClass = typeEnum->abstractType()->indexed();
 			base.access = Declaration::Public;
 			decl->addBaseClass( base );
 			
 			// enumeration class is special in that a bunch of generated functions
 			// are added matching the class type
-			const QVector<Declaration*> sourceDecl( typeDecl->internalContext()->localDeclarations() );
+			const QVector<Declaration*> sourceDecl( typeEnum->internalContext()->localDeclarations() );
 			static const IndexedIdentifier identWithOrder( (Identifier( "withOrder" )) );
 			static const IndexedIdentifier identNamed( (Identifier( "named" )) );
 			
@@ -693,7 +683,7 @@ void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 		do{
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), reachableContexts() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -938,7 +928,7 @@ void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 		AbstractType::Ptr type;
 		{
 		DUChainReadLocker lock;
-		ExpressionVisitor exprType( *editor(), currentContext(), reachableContexts() );
+		ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 		exprType.visitNode( node->type );
 		type = exprType.lastType();
 		}
@@ -973,7 +963,7 @@ void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDef
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprType( *editor(), currentContext(), reachableContexts() );
+	ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
 	exprType.visitNode( node->type );
 	type = exprType.lastType();
 	}

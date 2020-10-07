@@ -36,8 +36,7 @@ private:
 	
 public:
 	DeclarationBuilder( EditorIntegrator &editor, const ParseSession &parseSession,
-		const QSet<ImportPackage::Ref> &deps,
-		const QVector<ReferencedTopDUContext> &neighborContexts, int phase );
+		const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinder, int phase );
 	~DeclarationBuilder() override;
 	
 	/** Close namespace contexts. */

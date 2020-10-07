@@ -69,6 +69,11 @@ public:
 	void contexts( State &state );
 	
 	/**
+	 * List of all contexts of this package and all dependencies deeply.
+	 */
+	QSet<TopDUContext*> deepAllContexts();
+	
+	/**
 	 * Packages this package depends on.
 	 */
 	inline QSet<Ref> dependsOn(){ return pDependsOn; }

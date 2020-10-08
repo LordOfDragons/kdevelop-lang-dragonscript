@@ -277,38 +277,45 @@ IndexedString Helpers::getDocumentationFileEnumeration(){
 
 Declaration *Helpers::declarationForName( const IndexedIdentifier &identifier,
 const CursorInRevision &location, const DUContext &context,
-const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder ){
-	QList<Declaration*> declarations;
-	
-	// find declaration in local context up to location
-// 	declarations = context.findLocalDeclarations( identifier, location );
-// 	if( ! declarations.isEmpty() ){
-// 		return declarations.last();
-// 	}
-	
-	// find declaration in this context, base class and up the parent chain. this finds
-	// also definitions in the local scope beyond the location. both checks are required
-	// with the location based local version first to avoid a later definition hiding a
-	// local one instead of vice versa
-	declarations = context.findDeclarations( identifier, location );
-	if( ! declarations.isEmpty() ){
-		return declarations.last();
-	}
-	
-	// find declarations in base context. for this to work properly we to first find the
-	// closest class declaration up the parent chain
+const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder ){
+	// findLocalDeclarations() and findDeclarations() are not working for dragonscript
+	// since they search only up to a specific location. it is also not possible to skip
+	// that location at all otherwise the first context-for-location look up fails.
+	// we have thus to search on our own. start searching limited by location until the
+	// function definition is hit. then continue with unlimited searching
 	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
-	if( classDecl && classDecl->internalContext() ){
-		Declaration * const foundDeclaration = declarationForNameInBase(
-			identifier, *classDecl->internalContext(), typeFinder );
-		if( foundDeclaration ){
-			return foundDeclaration;
+	const DUContext * const classContext = classDecl ? classDecl->internalContext() : nullptr;
+	const DUContext *searchContext = &context;
+	
+	if( location.isValid() ){
+		while( searchContext && searchContext != classContext ){
+			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier, location ) );
+			if( ! declarations.isEmpty() ){
+				return declarations.last();
+			}
+			searchContext = searchContext->parentContext();
 		}
 	}
 	
-	// find declaration in pinned contexts
-	foreach( const DUContext *pinned, pinnedNamespaces ){
-		declarations = pinned->findDeclarations( identifier );
+	while( searchContext ){
+		const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
+		if( ! declarations.isEmpty() ){
+			return declarations.last();
+		}
+		searchContext = searchContext->parentContext();
+	}
+	
+	// find declarations in base contexts
+	if( classContext ){
+		Declaration * const declaration = declarationForNameInBase( identifier, *classContext, typeFinder );
+		if( declaration ){
+			return declaration;
+		}
+	}
+	
+	// find declaration in namespaces
+	foreach( const DUContext *ns, namespaces ){
+		const QList<Declaration*> declarations( ns->findDeclarations( identifier ) );
 		if( ! declarations.isEmpty() ){
 			return declarations.last();
 		}
@@ -327,23 +334,23 @@ const DUContext &context, TypeFinder &typeFinder ){
 	
 	uint i;
 	for( i=0; i<classDecl->baseClassesSize(); i++ ){
-		DUContext * const baseContext = typeFinder.contextFor(
-			classDecl->baseClasses()[ i ].baseClass.abstractType() );
-// 		qDebug() << "DEBUG" << classDecl->toString() << i
-// 			<< classDecl->baseClasses()[ i ].baseClass.abstractType()->toString()
-// 			<< (baseContext ? baseContext->scopeIdentifier(true).toString() : "-");
+		DUContext * const baseContext = typeFinder.contextFor( classDecl->baseClasses()[ i ].baseClass.abstractType() );
 		if( ! baseContext ){
 			continue;
 		}
 		
-		const QList<Declaration*> declarations( baseContext->findDeclarations( identifier ) );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
+		DUContext *searchContext = baseContext;
+		while( searchContext ){
+			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
+			if( ! declarations.isEmpty() ){
+				return declarations.last();
+			}
+			searchContext = searchContext->parentContext();
 		}
 		
-		Declaration * const foundDeclaration = declarationForNameInBase( identifier, *baseContext, typeFinder );
-		if( foundDeclaration ){
-			return foundDeclaration;
+		Declaration * const declaration = declarationForNameInBase( identifier, *baseContext, typeFinder );
+		if( declaration ){
+			return declaration;
 		}
 	}
 	
@@ -354,42 +361,53 @@ const DUContext &context, TypeFinder &typeFinder ){
 
 QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
 const CursorInRevision &location, const DUContext &context,
-const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder, bool onlyFunctions ){
-	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
-	QVector<Declaration*> foundDeclarations;
-	QList<Declaration*> declarations;
+const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder, bool onlyFunctions ){
+	// findLocalDeclarations() and findDeclarations() are not working for dragonscript
+	// since they search only up to a specific location. it is also not possible to skip
+	// that location at all otherwise the first context-for-location look up fails.
+	// we have thus to search on our own. start searching limited by location until the
+	// function definition is hit. then continue with unlimited searching
+	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
+	const DUContext * const classContext = classDecl ? classDecl->internalContext() : nullptr;
+	const DUContext *searchContext = &context;
+	QVector<Declaration*> declarations;
 	
+	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
 	if( onlyFunctions ){
 		searchFlags = ( DUContext::SearchFlag )( searchFlags | DUContext::OnlyFunctions );
 	}
 	
-	// find declaration in local context
-// 	declarations = context.findLocalDeclarations( identifier, location, nullptr, {}, searchFlags );
-// 	foreach( Declaration *declaration, declarations ){
-// 		foundDeclarations.append( declaration );
-// 	}
-	
-	// find declaration in this context and up the parent chain
-	declarations = context.findDeclarations( identifier, location, nullptr, searchFlags );
-	foreach( Declaration *declaration, declarations ){
-		if( ! foundDeclarations.contains( declaration ) ){
-			foundDeclarations << declaration;
+	if( location.isValid() ){
+		while( searchContext && searchContext != classContext ){
+			const QList<Declaration*> found( searchContext->findLocalDeclarations(
+				identifier, location, nullptr, {}, searchFlags ) );
+			foreach( Declaration *d, found ){
+				declarations << d;
+			}
+			searchContext = searchContext->parentContext();
 		}
 	}
 	
-	// find declarations in base context. for this to work properly we to first find the
-	// closest class declaration up the parent chain
-	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
-	if( classDecl && classDecl->internalContext() ){
-		foundDeclarations << declarationsForNameInBase( identifier,
-			*classDecl->internalContext(), typeFinder, onlyFunctions );
+	while( searchContext ){
+		const QList<Declaration*> found( searchContext->findLocalDeclarations(
+			identifier, CursorInRevision::invalid(), nullptr, {}, searchFlags ) );
+		foreach( Declaration *d, found ){
+			declarations << d;
+		}
+		searchContext = searchContext->parentContext();
 	}
 	
-	// find declarations in pinned contexts
-	foreach( const DUContext *pinned, pinnedNamespaces ){
-		declarations = pinned->findDeclarations( identifier, CursorInRevision::invalid(), nullptr, searchFlags );
-		foreach( Declaration* declaration, declarations ){
-			foundDeclarations << declaration;
+	// find declarations in base contexts
+	if( classContext ){
+		declarations << declarationsForNameInBase( identifier, *classContext, typeFinder, onlyFunctions );
+	}
+	
+	// find declaration in namespaces
+	foreach( const DUContext *ns, namespaces ){
+		const QList<Declaration*> found( ns->findDeclarations(
+			identifier, CursorInRevision::invalid(), nullptr, searchFlags ) );
+		foreach( Declaration* d, found ){
+			declarations << d;
 		}
 	}
 	
@@ -397,11 +415,11 @@ const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder, bo
 	if( ! onlyFunctions ){
 		ClassDeclaration * const globalDecl = typeFinder.declarationFor( identifier );
 		if( globalDecl ){
-			foundDeclarations << globalDecl;
+			declarations << globalDecl;
 		}
 	}
 	
-	return foundDeclarations;
+	return declarations;
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
@@ -414,7 +432,6 @@ const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 	}
 	
 	DUContext::SearchFlag searchFlags = DUContext::NoSearchFlags;
-	TopDUContext * const top = context.topContext();
 	uint i;
 	
 	if( onlyFunctions ){
@@ -428,12 +445,13 @@ const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 			continue;
 		}
 		
-		const QList<Declaration*> declarations( baseContext->findDeclarations(
-			identifier, CursorInRevision::invalid(), nullptr, searchFlags ) );
-		foreach( Declaration *declaration, declarations ){
-			if( ! foundDeclarations.contains( declaration ) ){
-				foundDeclarations.append( declaration );
+		DUContext *searchContext = baseContext;
+		while( searchContext ){
+			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
+			foreach( Declaration *decl, declarations ){
+				foundDeclarations << decl;
 			}
+			searchContext = searchContext->parentContext();
 		}
 		
 		foundDeclarations.append( declarationsForNameInBase(
@@ -446,7 +464,7 @@ const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 
 
 QVector<QPair<Declaration*, int>> Helpers::allDeclarations( const CursorInRevision& location,
-const DUContext &context, const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder ){
+const DUContext &context, const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder ){
 	// NOTE allDeclarations() is not used since it returns tons of duplicates and
 	//      does not play well with neighbor context searching
 	QVector<QPair<Declaration*, int>> declarations;
@@ -472,9 +490,9 @@ const DUContext &context, const QVector<const TopDUContext*> &pinnedNamespaces, 
 		}
 	}
 	
-	// find declarations in pinned contexts
-	foreach( const DUContext *pinned, pinnedNamespaces ){
-		const QVector<Declaration*> foundDeclarations( pinned->localDeclarations() );
+	// find declarations in namespaces
+	foreach( const DUContext *ns, namespaces ){
+		const QVector<Declaration*> foundDeclarations( ns->localDeclarations() );
 		foreach( Declaration *each, foundDeclarations){
 			declarations << QPair<Declaration*, int>{ each, 1000 };
 		}

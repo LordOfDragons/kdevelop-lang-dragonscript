@@ -170,7 +170,7 @@ public:
 	 **/
 	static Declaration *declarationForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context, 
-		const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder );
+		const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder );
 	
 	/**
 	 * Find first matching declaration in base classes only.
@@ -185,7 +185,7 @@ public:
 	 **/
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context,
-		const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder,
+		const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder,
 		bool onlyFunctions = false );
 	
 	/**
@@ -200,7 +200,7 @@ public:
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<QPair<Declaration*, int>> allDeclarations( const CursorInRevision& location,
-		const DUContext &context, const QVector<const TopDUContext*> &pinnedNamespaces,
+		const DUContext &context, const QVector<const TopDUContext*> &namespaces,
 		TypeFinder &typeFinder );
 	
 	/**

@@ -132,11 +132,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 }
 
 void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ){
-	if( ! node->nameSequence ){
-		return;
-	}
-	if( node->nameSequence->count() == 0 ){
-		qDebug() << "ExpressionVisitor::visitFullyQualifiedClassname: node->nameSequence->count() is 0!!!!!!";
+	if( ! node->nameSequence || node->nameSequence->count() == 0 ){
 		return;
 	}
 	

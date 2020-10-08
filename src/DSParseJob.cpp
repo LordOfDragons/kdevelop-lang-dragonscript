@@ -224,6 +224,21 @@ bool DSParseJob::checkAbort(){
 }
 
 bool DSParseJob::verifyUpdateRequired(){
+	if( minimumFeatures() & Resheduled ){
+		// reuse top context on rescheduled parsing as much as possible.
+		// 
+		// WARNING we have to put this check up ahead because KDevelop for some strange reason
+		//         fabricates TopDUContext::ForceUpdate into all rescheduled parsing requests
+		//         even though it is explicitly not used
+		DUChainWriteLocker lock;
+		foreach( const ParsingEnvironmentFilePointer &file, DUChain::self()->allEnvironmentFiles( document() ) ){
+			if( file->language() == languageString && file->topContext() ){
+				setDuChain( file->topContext() );
+			}
+			break;
+		}
+	}
+	
 	if( minimumFeatures() & ( TopDUContext::ForceUpdate | Resheduled ) ){
 		return false;
 	}

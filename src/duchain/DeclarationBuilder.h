@@ -40,17 +40,12 @@ public:
 	~DeclarationBuilder() override;
 	
 	/** Close namespace contexts. */
-	void closeNamespaceContexts();
-	
-	/**
-	 * Find all existing declarations for the identifier \p node.
-	 * \note DUChainReadLocker required.
-	 */
-	QList<Declaration*> existingDeclarationsForNode( IdentifierAst *node );
+	void closeNamespaceContexts( const CursorInRevision &location );
 	
 	/** Get documentation for node. */
 	QString getDocumentationForNode( const AstNode &node ) const;
 	
+    void visitStart( StartAst *node ) override;
 	void visitScript( ScriptAst *node ) override;
     void visitScriptDeclaration( ScriptDeclarationAst *node ) override;
 	void visitPin( PinAst *node ) override;

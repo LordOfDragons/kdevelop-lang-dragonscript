@@ -76,8 +76,8 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			if( context ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				DUChainReadLocker lock;
-				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
-					*context, useReachable ? pinnedNamespaces() : QVector<const TopDUContext*>(), *typeFinder() );
+				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(), *context,
+					useReachable ? pinnedNamespaces() : QVector<const TopDUContext*>(), *typeFinder() );
 			}
 			
 			if( ! decl ){

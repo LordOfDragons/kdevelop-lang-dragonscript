@@ -3,6 +3,8 @@
 #include <language/duchain/classdeclaration.h>
 #include <language/duchain/types/functiontype.h>
 
+#include <language/duchain/persistentsymboltable.h>
+
 #include <QByteArray>
 #include <QtGlobal>
 #include <QDebug>
@@ -15,6 +17,7 @@
 #include "PinNamespaceVisitor.h"
 #include "Helpers.h"
 #include "TypeFinder.h"
+#include "DumpChain.h"
 #include "../parser/ParseSession.h"
 
 
@@ -37,19 +40,17 @@ pPhase( phase )
 DeclarationBuilder::~DeclarationBuilder(){
 }
 
-void DeclarationBuilder::closeNamespaceContexts(){
+void DeclarationBuilder::closeNamespaceContexts( const CursorInRevision &location ){
 	while( pNamespaceContextCount > 0 ){
+		// we need to fix the range of the namespace since we do not know it before closing it
+		currentContext()->setRange( RangeInRevision( currentContext()->range().start, location ) );
+		
 		closeContext();
 		closeType();
+		eventuallyAssignInternalContext();
 		closeDeclaration();
 		pNamespaceContextCount--;
 	}
-}
-
-QList<Declaration*> DeclarationBuilder::existingDeclarationsForNode( IdentifierAst *node ){
-	return currentContext()->findDeclarations( identifierForNode( node ).last(),
-		CursorInRevision::invalid(), nullptr, ( DUContext::SearchFlag )
-			( DUContext::DontSearchInParent | DUContext::DontResolveAliases ) );
 }
 
 QString DeclarationBuilder::getDocumentationForNode( const AstNode &node ) const{
@@ -59,10 +60,18 @@ QString DeclarationBuilder::getDocumentationForNode( const AstNode &node ) const
 
 
 
+void DeclarationBuilder::visitStart( StartAst *node ){
+	DeclarationBuilderBase::visitStart( node );
+	
+	// close namespaces at the end of file
+	closeNamespaceContexts( editor()->findPosition( *node ) );
+	
+// 	DumpChain().dump(topContext());
+}
+
 void DeclarationBuilder::visitScript( ScriptAst *node ){
 	pLastModifiers = etmPublic;
 	DeclarationBuilderBase::visitScript( node );
-	closeNamespaceContexts();
 }
 
 void DeclarationBuilder::visitScriptDeclaration( ScriptDeclarationAst *node ){
@@ -90,17 +99,28 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 	// to get this working we need an alias definition for the pinned namespace
 	// as well as for all parent namespaces. to get the right search order the
 	// alias definitions have to be done in reverse order
-	QList<QPair<IdentifierAst*, QualifiedIdentifier>>::const_iterator iterAlias;
-	for( iterAlias = aliases.cbegin(); iterAlias != aliases.cend(); iterAlias++ ){
-		const RangeInRevision range( editorFindRangeNode( iterAlias->first ) );
-		NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
-			globalImportIdentifier(), range, DeclarationFlags::NoFlags );
-		eventuallyAssignInternalContext();
-		decl->setKind( Declaration::NamespaceAlias );
-		decl->setImportIdentifier( iterAlias->second );
-		decl->setIdentifier( iterAlias->second.last() );
-		decl->setInternalContext( openContext( iter->element, range, DUContext::Namespace, iterAlias->second ) );
-		closeContext();
+	if( ! aliases.isEmpty() ){
+		// we have to temporarily switch to global scope otherwise the declarations end
+		// up in the wrong context
+		injectContext( topContext() );
+		
+		QList<QPair<IdentifierAst*, QualifiedIdentifier>>::const_iterator iterAlias;
+		for( iterAlias = aliases.cbegin(); iterAlias != aliases.cend(); iterAlias++ ){
+			const RangeInRevision range( editorFindRangeNode( iterAlias->first ) );
+			NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
+				globalImportIdentifier(), range, DeclarationFlags::NoFlags );
+			eventuallyAssignInternalContext();
+			decl->setKind( Declaration::NamespaceAlias );
+			decl->setImportIdentifier( iterAlias->second );
+			decl->setIdentifier( iterAlias->second.last() );
+			//openContext( iter->element, range, DUContext::Namespace, iterAlias->second );
+			//closeContext();
+			//eventuallyAssignInternalContext();
+			closeDeclaration();
+		}
+		
+		// revert back to the open namespace
+		closeInjectedContext();
 	}
 }
 
@@ -110,14 +130,12 @@ void DeclarationBuilder::visitRequires( RequiresAst *node ){
 
 void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 // 	qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace";
-	closeNamespaceContexts();
+	closeNamespaceContexts( editor()->findPosition( *node, EditorIntegrator::FrontEdge ) );
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	
 	do{
-		const RangeInRevision range( editorFindRangeNode( iter->element ) );
-		
 		ClassDeclaration *decl = openDeclaration<ClassDeclaration>(
 			iter->element, iter->element, DeclarationFlags::NoFlags );
 // 		NamespaceAliasDeclaration *decl = openDeclaration<NamespaceAliasDeclaration>(
@@ -135,13 +153,21 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		
 		openType( type );
 		
-		openContext( iter->element, range, DUContext::Namespace, iter->element );
-		
-		{
-		DUChainWriteLocker lock;
-		currentContext()->setLocalScopeIdentifier( identifierForNode( iter->element ) );
-		decl->setInternalContext( currentContext() );
-		}
+		// NOTE we create a dummy range here which has to be updated once the namespace
+		//      is closed. for this to work we create a range with the starting location
+		//      only. the closing will then extend the end location
+		// 
+		// WARNING this is utterly strange but it DUContext::Namespace is used all calls
+		//         to declaration look-up functions fail to find declarations. by examining
+		//         the source code it looks "language/duchain/ducontext.cpp" struct Checker
+		//         at condition check "if (m_ownType != DUContext::Class ..." is the culprit.
+		//         the only working solution seems to be using DUContext::Class . it seems
+		//         the logic of being a namespace is not impacted by this. no idead what's
+		//         going on there but sticking to DUContext::Class for the time being
+		const CursorInRevision location( editor()->findPosition( *node ) );
+		openContext( iter->element, RangeInRevision( location, location ),
+			/*DUContext::Namespace*/DUContext::Class, iter->element );
+		decl->setInternalContext( currentContext() ); // seems to be required
 		
 		iter = iter->next;
 		pNamespaceContextCount++;
@@ -149,11 +175,19 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 	}while( iter != end );
 }
 
+static bool contextIsChildOrEqual(const DUContext* childContext, const DUContext* context){
+  if(childContext == context)
+    return true;
+
+  if(childContext->parentContext())
+    return contextIsChildOrEqual(childContext->parentContext(), context);
+  else
+    return false;
+}
+
 void DeclarationBuilder::visitClass( ClassAst *node ){
 	ClassDeclaration * const decl = openDeclaration<ClassDeclaration>(
 		node->begin->name, node->begin->name, DeclarationFlags::NoFlags );
-	
-	eventuallyAssignInternalContext();
 	
 	decl->setKind( Declaration::Type );
 	decl->setComment( getDocumentationForNode( *node ) );
@@ -218,20 +252,20 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 		}
 	}
 	
-	// continue
+	// class body
 	StructureType::Ptr type( new StructureType() );
 	type->setDeclaration( decl );
 	decl->setType( type );
 	
 	openType( type );
-	
 	openContextClass( node );
-	decl->setInternalContext( currentContext() );
+	decl->setInternalContext( currentContext() ); // seems to be required
 	
 	DeclarationBuilderBase::visitClass( node );
 	
 	closeContext();
 	closeType();
+	eventuallyAssignInternalContext();
 	closeDeclaration();
 }
 
@@ -356,7 +390,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	// plugins you have to import the function context to the body context. very complicated
 	openContextClassFunction( node );
 	DUContext * const functionContext = currentContext();
-	decl->setInternalContext( functionContext );
+	decl->setInternalContext( functionContext ); // seems to be required
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *iter = node->begin->argumentsSequence->front();
@@ -429,6 +463,7 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	}
 	
 	closeContext();
+	eventuallyAssignInternalContext();
 	closeDeclaration();
 }
 
@@ -481,14 +516,14 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 	decl->setType( type );
 	
 	openType( type );
-	
 	openContextInterface( node );
-	decl->setInternalContext( currentContext() );
+	decl->setInternalContext( currentContext() ); // seems to be required
 	
 	DeclarationBuilderBase::visitInterface( node );
 	
 	closeContext();
 	closeType();
+	eventuallyAssignInternalContext();
 	closeDeclaration();
 }
 
@@ -535,7 +570,7 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 	}
 	
 	openContextInterfaceFunction( node );
-	decl->setInternalContext( currentContext() );
+	decl->setInternalContext( currentContext() ); // seems to be required
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ClassFunctionDeclareArgumentAst*> *iter = node->begin->argumentsSequence->front();
@@ -568,6 +603,7 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 	DeclarationBuilderBase::visitInterfaceFunctionDeclare( node );
 	
 	closeContext();
+	eventuallyAssignInternalContext();
 	closeDeclaration();
 }
 
@@ -592,7 +628,7 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	openType( type );
 	
 	openContextEnumeration( node );
-	decl->setInternalContext( currentContext() );
+	decl->setInternalContext( currentContext() ); // seems to be required
 	
 	// base class. this is only done if this is not the enumeration class from
 	// the documentation being parsed
@@ -641,6 +677,7 @@ void DeclarationBuilder::visitEnumeration( EnumerationAst *node ){
 	
 	closeContext();
 	closeType();
+	eventuallyAssignInternalContext();
 	closeDeclaration();
 }
 
@@ -674,7 +711,7 @@ void DeclarationBuilder::visitEnumerationEntry( EnumerationEntryAst *node ){
 void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 	// NOTE called only if pPhase > 1
 	
-	openContext( node, DUContext::Other ); //, QualifiedIdentifier( "{block}" ) );
+	openContext( node, DUContext::Other );
 	
 	if( node->begin->argumentsSequence ){
 		const KDevPG::ListNode<ExpressionBlockArgumentAst*> *iter = node->begin->argumentsSequence->front();
@@ -714,7 +751,6 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 		const KDevPG::ListNode<StatementAst*> *end = iter;
 		
 		openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-			//, QualifiedIdentifier( "{if}" ) );
 		
 		do{
 			visitNode( iter->element );
@@ -743,7 +779,6 @@ void DeclarationBuilder::visitStatementIf( StatementIfAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->elseSequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{else}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -766,7 +801,6 @@ void DeclarationBuilder::visitStatementElif( StatementElifAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{elif}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -800,7 +834,6 @@ void DeclarationBuilder::visitStatementSelect( StatementSelectAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->elseSequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{switch-else}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -830,7 +863,6 @@ void DeclarationBuilder::visitStatementCase( StatementCaseAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{case}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -857,7 +889,6 @@ void DeclarationBuilder::visitStatementFor( StatementForAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{for}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -880,7 +911,6 @@ void DeclarationBuilder::visitStatementWhile( StatementWhileAst *node ){
 	const KDevPG::ListNode<StatementAst*> *end = iter;
 	
 	openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-		//, QualifiedIdentifier( "{while}" ) );
 	
 	do{
 		visitNode( iter->element );
@@ -898,7 +928,6 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 		const KDevPG::ListNode<StatementAst*> *end = iter;
 		
 		openContext( iter->element, node->bodySequence->back()->element, DUContext::Other );
-			//, QualifiedIdentifier( "{try}" ) );
 		
 		iter = node->bodySequence->front();
 		do{
@@ -922,7 +951,7 @@ void DeclarationBuilder::visitStatementTry( StatementTryAst *node ){
 void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 	// NOTE called only if pPhase > 1
 	
-	openContext( node, DUContext::Other ); //, QualifiedIdentifier( "{catch}" ) );
+	openContext( node, DUContext::Other );
 	
 	if( node->variable ){
 		AbstractType::Ptr type;
@@ -937,7 +966,6 @@ void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 			node->variable, node->variable, DeclarationFlags::NoFlags );
 		decl->setType( type );
 		decl->setKind( Declaration::Instance );
-		
 		closeDeclaration();
 	}
 	

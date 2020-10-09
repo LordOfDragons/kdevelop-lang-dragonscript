@@ -515,8 +515,9 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 		duChain()->clearProblems();
 	}
 	
-	DeclarationBuilder builder( editor, editor.session(), pDependencies, pTypeFinder, pPhase );
+	DeclarationBuilder builder( editor, editor.session(), pDependencies, pTypeFinder, pRootNamespace, pPhase );
 	setDuChain( builder.build( document(), pStartAst, duChain() ) );
+	pRootNamespace = builder.rootNamespace();
 	
 // 	DumpChain().dump( duChain() );
 	if( builder.requiresRebuild() ){
@@ -530,8 +531,9 @@ bool DSParseJob::buildDeclaration( EditorIntegrator &editor ){
 
 bool DSParseJob::buildUses( EditorIntegrator &editor ){
 	// gather uses of variables and functions on the document
-	UseBuilder builder( editor, pDependencies, pTypeFinder );
+	UseBuilder builder( editor, pDependencies, pTypeFinder, pRootNamespace );
 	builder.buildUses( pStartAst );
+	pRootNamespace = builder.rootNamespace();
 	
 	if( builder.requiresRebuild() ){
 		pReparsePriority = qMax( pReparsePriority, builder.reparsePriority() + 10 );

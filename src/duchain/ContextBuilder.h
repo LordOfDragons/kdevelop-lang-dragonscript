@@ -11,6 +11,7 @@
 #include "dsp_defaultvisitor.h"
 #include "duchainexport.h"
 #include "ImportPackage.h"
+#include "Namespace.h"
 
 
 using namespace KDevelop;
@@ -18,7 +19,6 @@ using namespace KDevelop;
 namespace DragonScript{
 
 class EditorIntegrator;
-class TypeFinder;
 
 typedef AbstractContextBuilder<AstNode, IdentifierAst> ContextBuilderBase;
 
@@ -32,11 +32,14 @@ private:
 	EditorIntegrator *pEditor = nullptr;
 	int pNamespaceContextCount = 0;
 	QSet<ImportPackage::Ref> pDependencies;
-	QVector<const TopDUContext*> pPinnedNamespaces;
+	Namespace *pCurNamespace;
+	QVector<Namespace*> pSearchNamespaces;
+	QVector<Namespace*> pPinnedNamespaces;
 	bool pRequiresRebuild = false;
 	int pReparsePriority = 0;
 	QSet<IndexedString> pWaitForFiles;
 	TypeFinder *pTypeFinder = nullptr;
+	Namespace::Ref *pRootNamespace = nullptr;
 	
 	
 	
@@ -49,11 +52,20 @@ public:
 	inline TypeFinder *typeFinder() const{ return pTypeFinder; }
 	void setTypeFinder( TypeFinder *typeFindef );
 	
+	inline Namespace::Ref &rootNamespace(){ return *pRootNamespace; }
+	void setRootNamespace( Namespace::Ref &rootNamespace );
+	
 	inline const QSet<ImportPackage::Ref> &dependencies() const{ return pDependencies; }
 	void setDependencies( const QSet<ImportPackage::Ref> &deps );
 	
-	inline QVector<const TopDUContext*> &pinnedNamespaces(){ return pPinnedNamespaces; }
-	inline const QVector<const TopDUContext*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
+	inline Namespace *curNamespace() const{ return pCurNamespace; }
+	void setCurNamespace( Namespace *ns );
+	
+	QVector<Namespace*> &searchNamespaces(){ return pSearchNamespaces; }
+	const QVector<Namespace*> &searchNamespaces() const{ return pSearchNamespaces; }
+	
+	QVector<Namespace*> &pinnedNamespaces(){ return pPinnedNamespaces; }
+	const QVector<Namespace*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
 	
 	inline bool requiresRebuild() const{ return pRequiresRebuild; }
 	void setRequiresRebuild( bool failed );

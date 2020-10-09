@@ -32,7 +32,8 @@ private:
 	
 	
 public:
-	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinder );
+	UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps,
+		TypeFinder &typeFinder, Namespace::Ref &namespaceRef );
 	
 	/** Parser session. */
 	inline ParseSession &parseSession() const{ return pParseSession; }

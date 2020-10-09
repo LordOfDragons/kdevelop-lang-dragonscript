@@ -27,14 +27,15 @@ using namespace KDevelop;
 namespace DragonScript {
 
 ExpressionVisitor::ExpressionVisitor( const EditorIntegrator &editorIntegrator,
-	const DUContext *ctx, const QVector<const TopDUContext*> &pinnedNamespaces,
-	TypeFinder &typeFinder, const CursorInRevision cursorOffset ) :
+	const DUContext *ctx, const QVector<Namespace*> &searchNamespaces,
+	TypeFinder &typeFinder, Namespace &rootNamespace, const CursorInRevision cursorOffset ) :
 DynamicLanguageExpressionVisitor( ctx ),
 pEditor( editorIntegrator ),
 pCursorOffset( cursorOffset ),
 pTypeFinder( typeFinder ),
 pIsTypeName( false ),
-pPinnedNamespaces( pinnedNamespaces )
+pSearchNamespaces( searchNamespaces ),
+pRootNamespace( rootNamespace )
 {
 	Q_ASSERT( m_context );
 	Q_ASSERT( m_context->topContext() );
@@ -156,7 +157,8 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 			if( searchContext ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
-					*searchContext, useReachable ? pPinnedNamespaces : QVector<const TopDUContext*>(), pTypeFinder );
+					*searchContext, useReachable ? pSearchNamespaces : QVector<Namespace*>(),
+					pTypeFinder, pRootNamespace );
 			}
 			
 			if( ! decl ){
@@ -191,7 +193,8 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		// base object is a type so find an inner type
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		Declaration * const decl = Helpers::declarationForName( identifier,
-			pCursorOffset + pEditor.findPosition( *node->name ), *ctx, pPinnedNamespaces, pTypeFinder );
+			pCursorOffset + pEditor.findPosition( *node->name ), *ctx,
+			pSearchNamespaces, pTypeFinder, pRootNamespace );
 		
 		if( decl ){
 			encounterDecl( *decl );
@@ -227,7 +230,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		if( ctx ){
 			declarations = Helpers::declarationsForName( identifier,
 				pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-				*ctx, {}, pTypeFinder );
+				*ctx, {}, pTypeFinder, pRootNamespace );
 		}
 		
 		if( declarations.isEmpty() ){
@@ -241,7 +244,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
 							pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-							*ctx, pPinnedNamespaces, pTypeFinder );
+							*ctx, pSearchNamespaces, pTypeFinder, pRootNamespace );
 					}
 				}
 			}
@@ -513,8 +516,10 @@ const QVector<AbstractType::Ptr> &signature ){
 	QVector<Declaration*> declarations;
 	
 	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
-	declarations = Helpers::declarationsForName( IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ), ctx, {}, pTypeFinder );
+	declarations = Helpers::declarationsForName(
+		IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
+		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ),
+		ctx, {}, pTypeFinder, pRootNamespace );
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
 		encounterUnknown();

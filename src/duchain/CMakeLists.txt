@@ -9,8 +9,6 @@ set(duchain_STAT_SRCS
 	Helpers.h
 	ExpressionVisitor.cpp
 	ExpressionVisitor.h
-	PinNamespaceVisitor.cpp
-	PinNamespaceVisitor.h
 	UseBuilder.cpp
 	UseBuilder.h
 	DumpChain.cpp
@@ -29,6 +27,8 @@ set(duchain_STAT_SRCS
 	DelayedParsing.h
 	TypeFinder.cpp
 	TypeFinder.h
+	Namespace.cpp
+	Namespace.h
 )
 
 add_library(kdevdsduchain STATIC ${duchain_SRCS} ${duchain_STAT_SRCS})

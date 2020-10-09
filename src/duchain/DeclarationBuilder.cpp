@@ -14,7 +14,6 @@
 #include "DeclarationBuilder.h"
 #include "EditorIntegrator.h"
 #include "ExpressionVisitor.h"
-#include "PinNamespaceVisitor.h"
 #include "Helpers.h"
 #include "TypeFinder.h"
 #include "DumpChain.h"
@@ -26,7 +25,7 @@ using namespace KDevelop;
 namespace DragonScript{
 
 DeclarationBuilder::DeclarationBuilder( EditorIntegrator &editor, const ParseSession &parseSession,
-	const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinderr, int phase ) :
+	const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinderr, Namespace::Ref &namespaceRef, int phase ) :
 DeclarationBuilderBase(),
 pParseSession( parseSession ),
 pNamespaceContextCount( 0 ),
@@ -35,6 +34,7 @@ pPhase( phase )
 	setDependencies( deps );
 	setEditor( &editor );
 	setTypeFinder( &typeFinderr );
+	setRootNamespace( namespaceRef );
 }
 
 DeclarationBuilder::~DeclarationBuilder(){
@@ -88,12 +88,19 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 	QList<QPair<IdentifierAst*, QualifiedIdentifier>> aliases;
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	QualifiedIdentifier identifier;
+	Namespace *ns = rootNamespace().data();
 	
+	{
+	DUChainReadLocker lock; // for getOrAddNamespace
 	do{
-		identifier += Identifier( editor()->tokenText( *iter->element ) );
+		const IndexedIdentifier indexed( Identifier( editor()->tokenText( *iter->element ) ) );
+		identifier += indexed;
 		aliases.insert( 0, QPair<IdentifierAst*, QualifiedIdentifier>( iter->element, identifier ) );
 		iter = iter->next;
+		
+		ns = &ns->getOrAddNamespace( indexed );
 	}while( iter != end );
+	}
 	
 	// dragonscript allows searching in parent namespaces of pinned namespaces.
 	// to get this working we need an alias definition for the pinned namespace
@@ -122,6 +129,9 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 		// revert back to the open namespace
 		closeInjectedContext();
 	}
+	
+	pinnedNamespaces() << ns;
+	searchNamespaces() << ns;
 }
 
 void DeclarationBuilder::visitRequires( RequiresAst *node ){
@@ -129,11 +139,13 @@ void DeclarationBuilder::visitRequires( RequiresAst *node ){
 }
 
 void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
-// 	qDebug() << "KDevDScript: DeclarationBuilder::visitNamespace";
 	closeNamespaceContexts( editor()->findPosition( *node, EditorIntegrator::FrontEdge ) );
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	
+	searchNamespaces().clear();
+	setCurNamespace( rootNamespace().data() );
 	
 	do{
 		ClassDeclaration *decl = openDeclaration<ClassDeclaration>(
@@ -167,22 +179,20 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		const CursorInRevision location( editor()->findPosition( *node ) );
 		openContext( iter->element, RangeInRevision( location, location ),
 			/*DUContext::Namespace*/DUContext::Class, iter->element );
+		
+		{
+		DUChainReadLocker lock;
 		decl->setInternalContext( currentContext() ); // seems to be required
+		setCurNamespace( &curNamespace()->getOrAddNamespace( decl->indexedIdentifier() ) );
+		}
 		
 		iter = iter->next;
 		pNamespaceContextCount++;
 		
 	}while( iter != end );
-}
-
-static bool contextIsChildOrEqual(const DUContext* childContext, const DUContext* context){
-  if(childContext == context)
-    return true;
-
-  if(childContext->parentContext())
-    return contextIsChildOrEqual(childContext->parentContext(), context);
-  else
-    return false;
+	
+	searchNamespaces() << curNamespace();
+	searchNamespaces() << pinnedNamespaces();
 }
 
 void DeclarationBuilder::visitClass( ClassAst *node ){
@@ -209,7 +219,8 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 	if( pPhase > 1 ){
 		if( node->begin->extends ){
 			DUChainReadLocker lock;
-			ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+			ExpressionVisitor exprvisitor( *editor(), currentContext(),
+				searchNamespaces(), *typeFinder(), *rootNamespace().data() );
 			exprvisitor.visitNode( node->begin->extends );
 			
 			if( exprvisitor.lastType()
@@ -238,7 +249,8 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
 			DUChainReadLocker lock;
 			do{
-				ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+				ExpressionVisitor exprvisitor( *editor(), currentContext(),
+					searchNamespaces(), *typeFinder(), *rootNamespace().data() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
@@ -285,7 +297,8 @@ void DeclarationBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *n
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+	ExpressionVisitor exprType( *editor(), currentContext(), searchNamespaces(),
+		*typeFinder(), *rootNamespace().data() );
 	exprType.visitNode( node->type );
 	type = exprType.lastType();
 	}
@@ -368,7 +381,8 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	
 	if( node->begin->type ){
 		DUChainReadLocker lock;
-		ExpressionVisitor exprRetType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+		ExpressionVisitor exprRetType( *editor(), currentContext(), searchNamespaces(),
+			*typeFinder(), *rootNamespace().data() );
 		exprRetType.setAllowVoid( true );
 		exprRetType.visitNode( node->begin->type );
 		funcType->setReturnType( exprRetType.lastType() );
@@ -399,7 +413,8 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 			AbstractType::Ptr argType;
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), searchNamespaces(),
+				*typeFinder(), *rootNamespace().data() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -496,7 +511,8 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 			const KDevPG::ListNode<FullyQualifiedClassnameAst*> *end = iter;
 			DUChainReadLocker lock;
 			do{
-				ExpressionVisitor exprvisitor( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+				ExpressionVisitor exprvisitor( *editor(), currentContext(), searchNamespaces(),
+					*typeFinder(), *rootNamespace().data() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
 					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
@@ -563,7 +579,8 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 	FunctionType::Ptr funcType( new FunctionType() );
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprRetType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+	ExpressionVisitor exprRetType( *editor(), currentContext(), searchNamespaces(),
+		*typeFinder(), *rootNamespace().data() );
 	exprRetType.setAllowVoid( true );
 	exprRetType.visitNode( node->begin->type );
 	funcType->setReturnType( exprRetType.lastType() );
@@ -579,7 +596,8 @@ void DeclarationBuilder::visitInterfaceFunctionDeclare( InterfaceFunctionDeclare
 			AbstractType::Ptr argType;
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), searchNamespaces(),
+				*typeFinder(), *rootNamespace().data() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -720,7 +738,8 @@ void DeclarationBuilder::visitExpressionBlock( ExpressionBlockAst *node ){
 		do{
 			{
 			DUChainReadLocker lock;
-			ExpressionVisitor exprArgType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+			ExpressionVisitor exprArgType( *editor(), currentContext(), searchNamespaces(),
+				*typeFinder(), *rootNamespace().data() );
 			exprArgType.visitNode( iter->element->type );
 			argType = exprArgType.lastType();
 			}
@@ -957,7 +976,8 @@ void DeclarationBuilder::visitStatementCatch( StatementCatchAst *node ){
 		AbstractType::Ptr type;
 		{
 		DUChainReadLocker lock;
-		ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+		ExpressionVisitor exprType( *editor(), currentContext(), searchNamespaces(),
+			*typeFinder(), *rootNamespace().data() );
 		exprType.visitNode( node->type );
 		type = exprType.lastType();
 		}
@@ -991,7 +1011,8 @@ void DeclarationBuilder::visitStatementVariableDefinitions( StatementVariableDef
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprType( *editor(), currentContext(), pinnedNamespaces(), *typeFinder() );
+	ExpressionVisitor exprType( *editor(), currentContext(), searchNamespaces(),
+		*typeFinder(), *rootNamespace().data() );
 	exprType.visitNode( node->type );
 	type = exprType.lastType();
 	}

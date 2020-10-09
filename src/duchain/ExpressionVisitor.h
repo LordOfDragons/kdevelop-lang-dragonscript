@@ -21,6 +21,7 @@
 #include "EditorIntegrator.h"
 #include "Helpers.h"
 #include "TypeFinder.h"
+#include "Namespace.h"
 
 
 using namespace KDevelop;
@@ -59,14 +60,15 @@ private:
 	
 	bool pIsTypeName;
 	
-	const QVector<const TopDUContext*> &pPinnedNamespaces;
+	const QVector<Namespace*> &pSearchNamespaces;
+	Namespace &pRootNamespace;
 	
 	
 	
 public:
 	ExpressionVisitor( const EditorIntegrator &editorIntegrator, const DUContext *ctx,
-		const QVector<const TopDUContext*> &pinnedNamespaces, TypeFinder &typeFinder,
-		const CursorInRevision cursorOffset = CursorInRevision( 0, 0 ) );
+		const QVector<Namespace*> &searchNamespaces, TypeFinder &typeFinder,
+		Namespace &rootNamespace, const CursorInRevision cursorOffset = CursorInRevision( 0, 0 ) );
 	
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
 	void visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node ) override;

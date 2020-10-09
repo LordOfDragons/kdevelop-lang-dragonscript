@@ -1,7 +1,6 @@
 #ifndef TYPEFINDER_H
 #define TYPEFINDER_H
 
-#include <language/duchain/classdeclaration.h>
 #include <language/duchain/declaration.h>
 #include <language/duchain/classdeclaration.h>
 #include <language/duchain/topducontext.h>

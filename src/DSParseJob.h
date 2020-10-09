@@ -15,6 +15,7 @@
 #include "dsp_ast.h"
 #include "ImportPackage.h"
 #include "TypeFinder.h"
+#include "Namespace.h"
 
 
 using namespace KDevelop;
@@ -81,6 +82,7 @@ private:
 	DSProjectSettings pProjectSettings;
 	StartAst *pStartAst;
 	TypeFinder pTypeFinder;
+	Namespace::Ref pRootNamespace;
 	ImportPackage::Ref pPackage;
 	QSet<ImportPackage::Ref> pDependencies;
 	QSet<IndexedString> pProjectFiles;

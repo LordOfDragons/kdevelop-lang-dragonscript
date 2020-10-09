@@ -277,7 +277,7 @@ IndexedString Helpers::getDocumentationFileEnumeration(){
 
 Declaration *Helpers::declarationForName( const IndexedIdentifier &identifier,
 const CursorInRevision &location, const DUContext &context,
-const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder ){
+const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace ){
 	// findLocalDeclarations() and findDeclarations() are not working for dragonscript
 	// since they search only up to a specific location. it is also not possible to skip
 	// that location at all otherwise the first context-for-location look up fails.
@@ -314,15 +314,34 @@ const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder ){
 	}
 	
 	// find declaration in namespaces
-	foreach( const DUContext *ns, namespaces ){
-		const QList<Declaration*> declarations( ns->findDeclarations( identifier ) );
-		if( ! declarations.isEmpty() ){
-			return declarations.last();
+	if( ! namespaces.isEmpty() ){
+		Namespace *ns = nullptr;
+		foreach( Namespace *each, namespaces ){
+			ClassDeclaration * const classDecl = each->getClass( identifier );
+			if( classDecl ){
+				return classDecl;
+			}
+			if( ! each ){
+				ns = each->getNamespace( identifier );
+			}
+		}
+		if( ns && ns->declaration() ){
+			return ns->declaration();
 		}
 	}
 	
 	// find declaration in global scope
-	return typeFinder.declarationFor( identifier );
+	ClassDeclaration * const globalClassDecl = rootNamespace.getClass( identifier );
+	if( globalClassDecl ){
+		return globalClassDecl;
+	}
+	
+	Namespace * const globalNS = rootNamespace.getNamespace( identifier );
+	if( globalNS ){
+		return globalNS->declaration();
+	}
+	
+	return nullptr;
 }
 
 Declaration *Helpers::declarationForNameInBase( const IndexedIdentifier &identifier,
@@ -361,7 +380,8 @@ const DUContext &context, TypeFinder &typeFinder ){
 
 QVector<Declaration*> Helpers::declarationsForName( const IndexedIdentifier &identifier,
 const CursorInRevision &location, const DUContext &context,
-const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder, bool onlyFunctions ){
+const QVector<Namespace*> &namespaces, TypeFinder &typeFinder,
+Namespace &rootNamespace, bool onlyFunctions ){
 	// findLocalDeclarations() and findDeclarations() are not working for dragonscript
 	// since they search only up to a specific location. it is also not possible to skip
 	// that location at all otherwise the first context-for-location look up fails.
@@ -399,23 +419,36 @@ const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder, bool onl
 	
 	// find declarations in base contexts
 	if( classContext ){
-		declarations << declarationsForNameInBase( identifier, *classContext, typeFinder, onlyFunctions );
+		declarations << declarationsForNameInBase( identifier, *classContext,
+			typeFinder, rootNamespace, onlyFunctions );
 	}
 	
-	// find declaration in namespaces
-	foreach( const DUContext *ns, namespaces ){
-		const QList<Declaration*> found( ns->findDeclarations(
-			identifier, CursorInRevision::invalid(), nullptr, searchFlags ) );
-		foreach( Declaration* d, found ){
-			declarations << d;
+	// find declaration in namespaces. add first classes then namespace declarations
+	if( ! onlyFunctions && ! namespaces.isEmpty() ){
+		QVector<Declaration*> namespaceDecls;
+		foreach( Namespace *each, namespaces ){
+			ClassDeclaration * const classDecl = each->getClass( identifier );
+			if( classDecl ){
+				declarations << classDecl;
+			}
+			Namespace * const possibleNS = each->getNamespace( identifier );
+			if( possibleNS && possibleNS->declaration() ){
+				namespaceDecls << possibleNS->declaration();
+			}
 		}
+		declarations << namespaceDecls;
 	}
 	
 	// find declaration in global scope
 	if( ! onlyFunctions ){
-		ClassDeclaration * const globalDecl = typeFinder.declarationFor( identifier );
-		if( globalDecl ){
-			declarations << globalDecl;
+		ClassDeclaration * const classDecl = rootNamespace.getClass( identifier );
+		if( classDecl ){
+			declarations << classDecl;
+		}
+		
+		Namespace * const possibleNS = rootNamespace.getNamespace( identifier );
+		if( possibleNS && possibleNS->declaration() ){
+			declarations << possibleNS->declaration();
 		}
 	}
 	
@@ -423,7 +456,7 @@ const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder, bool onl
 }
 
 QVector<Declaration*> Helpers::declarationsForNameInBase( const IndexedIdentifier &identifier,
-const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
+const DUContext &context, TypeFinder &typeFinder, Namespace &rootNamespace, bool onlyFunctions ){
 	QVector<Declaration*> foundDeclarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );
@@ -454,8 +487,8 @@ const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 			searchContext = searchContext->parentContext();
 		}
 		
-		foundDeclarations.append( declarationsForNameInBase(
-			identifier, *baseContext, typeFinder, onlyFunctions ) );
+		foundDeclarations.append( declarationsForNameInBase( identifier, *baseContext,
+			typeFinder, rootNamespace, onlyFunctions ) );
 	}
 	
 	return foundDeclarations;
@@ -464,37 +497,71 @@ const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions ){
 
 
 QVector<QPair<Declaration*, int>> Helpers::allDeclarations( const CursorInRevision& location,
-const DUContext &context, const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder ){
-	// NOTE allDeclarations() is not used since it returns tons of duplicates and
-	//      does not play well with neighbor context searching
+const DUContext &context, const QVector<Namespace*> &namespaces, TypeFinder &typeFinder,
+Namespace &rootNamespace ){
+	// findLocalDeclarations() and findDeclarations() are not working for dragonscript
+	// since they search only up to a specific location. it is also not possible to skip
+	// that location at all otherwise the first context-for-location look up fails.
+	// we have thus to search on our own. start searching limited by location until the
+	// function definition is hit. then continue with unlimited searching
+	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
+	const DUContext * const classContext = classDecl ? classDecl->internalContext() : nullptr;
 	QVector<QPair<Declaration*, int>> declarations;
-	
-	// find declaration in this context and up the parent chain
 	const DUContext *searchContext = &context;
+	
+	if( location.isValid() ){
+		while( searchContext && searchContext != classContext ){
+			const QVector<Declaration*> found( searchContext->localDeclarations() );
+			foreach( Declaration *d, found ){
+				if( d->range().end < location ){
+					declarations << QPair<Declaration*, int>{ d, 0 };
+				}
+			}
+			searchContext = searchContext->parentContext();
+		}
+	}
+	
 	while( searchContext ){
-		const QVector<Declaration*> foundDeclarations( searchContext->localDeclarations() );
-		foreach( Declaration *each, foundDeclarations ){
-			declarations << QPair<Declaration*, int>{ each, 0 };
+		const QVector<Declaration*> found( searchContext->localDeclarations() );
+		foreach( Declaration *d, found ){
+			declarations << QPair<Declaration*, int>{ d, 0 };
 		}
 		searchContext = searchContext->parentContext();
 	}
 	
-	// find declarations in base context. for this to work properly we first find the
-	// closest class declaration up the parent chain
-	const ClassDeclaration * const classDecl = thisClassDeclFor( context );
-	if( classDecl && classDecl->internalContext() ){
-		const QVector<QPair<Declaration*, int>> declList(
-			allDeclarationsInBase( *classDecl->internalContext(), typeFinder ) );
+	// find declarations in base contexts
+	if( classContext ){
+		const QVector<QPair<Declaration*, int>> declList( allDeclarationsInBase( *classContext, typeFinder ) );
 		foreach( auto each, declList ){
 			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
 		}
 	}
 	
-	// find declarations in namespaces
-	foreach( const DUContext *ns, namespaces ){
-		const QVector<Declaration*> foundDeclarations( ns->localDeclarations() );
-		foreach( Declaration *each, foundDeclarations){
-			declarations << QPair<Declaration*, int>{ each, 1000 };
+	// find declaration in namespaces. add first classes then namespace declarations
+	if( ! namespaces.isEmpty() ){
+		QVector<Declaration*> namespaceDecls;
+		foreach( Namespace *each, namespaces ){
+			foreach( const Namespace::ClassDeclarationPointer &classDecl, each->classes() ){
+				declarations << QPair<Declaration*, int>{ classDecl.data(), 1000 };
+			}
+			foreach( const Namespace::Ref &nsref, each->namespaces() ){
+				if( nsref && nsref->declaration() ){
+					namespaceDecls << nsref->declaration();
+				}
+			}
+		}
+		foreach( Declaration *nsdecl, namespaceDecls ){
+			declarations << QPair<Declaration*, int>{ nsdecl, 1000 };
+		}
+	}
+	
+	// find declaration in global scope
+	foreach( const Namespace::ClassDeclarationPointer &classDecl, rootNamespace.classes() ){
+		declarations << QPair<Declaration*, int>{ classDecl.data(), 1000 };
+	}
+	foreach( const Namespace::Ref &nsref, rootNamespace.namespaces() ){
+		if( nsref && nsref->declaration() ){
+			declarations << QPair<Declaration*, int>{ nsref->declaration(), 1000 };
 		}
 	}
 	
@@ -502,8 +569,6 @@ const DUContext &context, const QVector<const TopDUContext*> &namespaces, TypeFi
 }
 
 QVector<QPair<Declaration*, int>> Helpers::allDeclarationsInBase( const DUContext &context, TypeFinder &typeFinder ){
-	// NOTE allDeclarations() is not used since it returns tons of duplicates and
-	//      does not play well with neighbor context searching
 	QVector<QPair<Declaration*, int>> declarations;
 	
 	const ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( context.owner() );

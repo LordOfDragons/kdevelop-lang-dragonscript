@@ -27,8 +27,17 @@ void ContextBuilder::setTypeFinder( TypeFinder *typeFinder ){
 	pTypeFinder = typeFinder;
 }
 
+void ContextBuilder::setRootNamespace( Namespace::Ref &rootNamespace ){
+	pRootNamespace = &rootNamespace;
+	pCurNamespace = rootNamespace.data();
+}
+
 void ContextBuilder::setDependencies( const QSet<ImportPackage::Ref> &deps ){
 	pDependencies = deps;
+}
+
+void ContextBuilder::setCurNamespace( Namespace *ns ){
+	pCurNamespace = ns;
 }
 
 void ContextBuilder::setRequiresRebuild( bool rebuild ){
@@ -55,6 +64,11 @@ void ContextBuilder::startVisiting( AstNode *node ){
 			return;
 		}
 	}
+	
+	if( ! *pRootNamespace ){
+		*pRootNamespace = Namespace::Ref( new Namespace( *pTypeFinder ) );
+	}
+	pCurNamespace = pRootNamespace->data();
 	
 	// visit node to start building
 	visitNode( node );

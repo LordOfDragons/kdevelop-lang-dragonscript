@@ -23,7 +23,8 @@ using namespace KDevelop;
 
 namespace DragonScript{
 
-UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps, TypeFinder &typeFinderr ) :
+UseBuilder::UseBuilder( EditorIntegrator &editor, const QSet<ImportPackage::Ref> &deps,
+	TypeFinder &typeFinderr, Namespace::Ref &namespaceRef ) :
 pParseSession( *editor.parseSession() ),
 pEnableErrorReporting( true ),
 pAllowVoidType( false ),
@@ -34,6 +35,7 @@ pIgnoreVariable( nullptr )
 	setDependencies( deps );
 	setEditor( &editor );
 	setTypeFinder( &typeFinderr );
+	setRootNamespace( namespaceRef );
 }
 
 
@@ -76,43 +78,15 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 			if( context ){
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				DUChainReadLocker lock;
-				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(), *context,
-					useReachable ? pinnedNamespaces() : QVector<const TopDUContext*>(), *typeFinder() );
+				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
+					*context, useReachable ? pinnedNamespaces() : QVector<Namespace*>(),
+					*typeFinder(), *rootNamespace().data() );
 			}
 			
 			if( ! decl ){
 				if( context ){
 					reportSemanticError( useRange, i18n( "Unknown type: %1 in %2",
 						name, context->localScopeIdentifier().toString() ) );
-#if 0
-					// findLocalDeclarations() is broken for namespaces
-					{
-						DUChainReadLocker lock;
-						const QVector<QPair<Declaration*, int>> d(context->allDeclarations(
-							CursorInRevision::invalid(), context->topContext(), false));
-						const IndexedIdentifier identifier( (Identifier( name )) );
-						qDebug() << "CHECK" << identifier.identifier().toString() << identifier.index()
-							<< context->inSymbolTable() << context->scopeIdentifier(false);
-						foreach(auto each, d){
-							qDebug() << "AllDecl" << each.first->toString()
-								<< each.first->indexedIdentifier().index()
-								<< each.first->inSymbolTable()
-								<< (IndexedDeclaration(each.first).topContextIndex() == context->topContext()->ownIndex())
-								<< (each.first->context() == context);
-						}
-						QList<Declaration*> d2( context->findLocalDeclarations(identifier,
-							CursorInRevision::invalid()));
-						foreach(Declaration *each, d2){
-							qDebug() << "LocalDecl" << each->toString() << each->indexedIdentifier().index();
-						}
-						const IndexedQualifiedIdentifier id(context->scopeIdentifier(true) + identifier);
-						const IndexedDeclaration* d3;
-						uint count;
-						PersistentSymbolTable::self().declarations(id, count, d3);
-						qDebug() << "SHIT" << id.identifier().toString() << count << d3 << (d3 ? d3->declaration() : nullptr)
-							<< (d3 && d3->declaration() ? d3->declaration()->toString() : "null");
-					}
-#endif
 					
 				}else{
 					reportSemanticError( useRange, i18n( "Unknown type: %1", name ) );
@@ -134,14 +108,45 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 	}while( iter != end );
 }
 
-void UseBuilder::visitPin( PinAst* ){
-	// ducontext findLocalDeclarations() is broken beyond repair for namespaces
-// 	UseBuilderBase::visitPin( node );
+void UseBuilder::visitPin( PinAst *node ){
+	if( ! node->name->nameSequence ){
+		return;
+	}
+	
+	DUChainReadLocker lock;
+	
+	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
+	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	Namespace *ns = rootNamespace().data();
+	
+	do{
+		ns = &ns->getOrAddNamespace( editor()->tokenText( *iter->element ) );
+		iter = iter->next;
+	}while( iter != end );
+	
+	pinnedNamespaces() << ns;
+	searchNamespaces() << ns;
 }
 
-void UseBuilder::visitNamespace( NamespaceAst* ){
-	// ducontext findLocalDeclarations() is broken beyond repair for namespaces
-// 	UseBuilderBase::visitNamespace( node );
+void UseBuilder::visitNamespace( NamespaceAst *node ){
+	if( ! node->name->nameSequence ){
+		return;
+	}
+	
+	DUChainReadLocker lock;
+	
+	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
+	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	setCurNamespace( rootNamespace().data() );
+	
+	do{
+		setCurNamespace( &curNamespace()->getOrAddNamespace( editor()->tokenText( *iter->element ) ) );
+		iter = iter->next;
+	}while( iter != end );
+	
+	searchNamespaces().clear();
+	searchNamespaces() << curNamespace();
+	searchNamespaces() << pinnedNamespaces();
 }
 
 void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ){
@@ -324,7 +329,8 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(), *typeFinder() );
+	ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(),
+		*typeFinder(), *rootNamespace() );
 	exprValue.visitNode( node );
 	declaration = exprValue.lastDeclaration();
 	type = exprValue.lastType();
@@ -379,7 +385,8 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		DUChainReadLocker lock;
 		if( context ){
 			declarations = Helpers::declarationsForName( identifier, editor()->findPosition( *node ),
-				*context, pCanBeType ? pinnedNamespaces() : QVector<const TopDUContext*>(), *typeFinder() );
+				*context, pCanBeType ? pinnedNamespaces() : QVector<Namespace*>(),
+				*typeFinder(), *rootNamespace().data() );
 			
 			if( pIgnoreVariable ){
 				QVector<Declaration*>::iterator iter;
@@ -400,7 +407,7 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 			
 			if( context ){
 				declarations = Helpers::declarationsForName( identifier,
-					editor()->findPosition( *node ), *context, {}, *typeFinder() );
+					editor()->findPosition( *node ), *context, {}, *typeFinder(), *rootNamespace() );
 			}
 		}
 		
@@ -727,7 +734,8 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
 				if( context ){
 					DUChainReadLocker lock;
-					ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(), *typeFinder() );
+					ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(),
+						*typeFinder(), *rootNamespace() );
 					exprValue.visitNode( iter->element->type );
 					const DeclarationPointer declaration( exprValue.lastDeclaration() );
 					if( declaration ){
@@ -941,8 +949,8 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 			}
 			
 		}else{
-			declarations = Helpers::declarationsForName( identifier,
-				CursorInRevision::invalid(), *context, {}, *typeFinder(), true );
+			declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(),
+				*context, {}, *typeFinder(), *rootNamespace(), true );
 		}
 	}
 	

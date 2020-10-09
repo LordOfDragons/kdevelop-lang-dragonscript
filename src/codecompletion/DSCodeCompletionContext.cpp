@@ -89,7 +89,7 @@ bool &abort, bool fullCompletion ){
 	tokenizeText( m_text );
 // 	debugLogTokenStream();
 	
-	findReachableContexts();
+	findSearchContexts();
 	
 	// depending on the context different completions are reasonable
 	switch( context->type() ){
@@ -240,7 +240,7 @@ void DSCodeCompletionContext::debugLogTokenStream( const QString &prefix ) const
 	}
 }
 
-void DSCodeCompletionContext::findReachableContexts(){
+void DSCodeCompletionContext::findSearchContexts(){
 	DUChainReadLocker lock;
 	QSet<IndexedString> files;
 	
@@ -275,6 +275,8 @@ void DSCodeCompletionContext::findReachableContexts(){
 		preparePackage( *ImportPackageLanguage::self() );
 		preparePackage( *ImportPackageDragengine::self() );
 	}
+	
+	pRootNamespace = Namespace::Ref( new Namespace( pTypeFinder ) );
 }
 
 void DSCodeCompletionContext::preparePackage( ImportPackage &package ){

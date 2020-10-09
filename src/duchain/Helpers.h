@@ -20,6 +20,7 @@
 #include "duchainexport.h"
 #include "dsp_ast.h"
 #include "ImportPackage.h"
+#include "Namespace.h"
 
 
 using namespace KDevelop;
@@ -170,7 +171,7 @@ public:
 	 **/
 	static Declaration *declarationForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context, 
-		const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder );
+		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace );
 	
 	/**
 	 * Find first matching declaration in base classes only.
@@ -185,23 +186,24 @@ public:
 	 **/
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context,
-		const QVector<const TopDUContext*> &namespaces, TypeFinder &typeFinder,
-		bool onlyFunctions = false );
+		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder,
+		Namespace &rootNamespace, bool onlyFunctions = false );
 	
 	/**
 	 * Find all matching declarations in base classes only.
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<Declaration*> declarationsForNameInBase( const IndexedIdentifier &identifier,
-		const DUContext &context, TypeFinder &typeFinder, bool onlyFunctions = false );
+		const DUContext &context, TypeFinder &typeFinder, Namespace &rootNamespace,
+		bool onlyFunctions = false );
 	
 	/**
 	 * Find all declarations.
 	 * \note DUChainReadLocker required.
 	 **/
 	static QVector<QPair<Declaration*, int>> allDeclarations( const CursorInRevision& location,
-		const DUContext &context, const QVector<const TopDUContext*> &namespaces,
-		TypeFinder &typeFinder );
+		const DUContext &context, const QVector<Namespace*> &namespaces,
+		TypeFinder &typeFinder, Namespace &rootNamespace );
 	
 	/**
 	 * Find all declarations in base classes only.

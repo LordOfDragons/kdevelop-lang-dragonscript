@@ -11,6 +11,7 @@
 
 #include "ImportPackage.h"
 #include "TypeFinder.h"
+#include "Namespace.h"
 
 
 using namespace KDevelop;
@@ -96,16 +97,19 @@ public:
 	/** Project files. */
 	inline const QSet<IndexedString> &projectFiles() const{ return pProjectFiles; }
 	
-	/** Reachable contexts. */
-	inline const QVector<const TopDUContext*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
+	/** Search namespaces. */
+	inline const QVector<Namespace*> &searchNamespaces() const{ return pSearchNamespaces; }
 	
 	/** Type finder. */
 	inline TypeFinder &typeFinder(){ return pTypeFinder; }
 	
+	/** Root namespace. */
+	inline const Namespace::Ref &rootNamespace(){ return pRootNamespace; }
+	
 	
 	
 protected:
-	void findReachableContexts();
+	void findSearchContexts();
 	void preparePackage( ImportPackage &package );
 	
 	
@@ -129,7 +133,8 @@ private:
 	QList<CompletionTreeElementPointer> pItemGroups;
 	
 	TypeFinder pTypeFinder;
-	QVector<const TopDUContext*> pPinnedNamespaces;
+	Namespace::Ref pRootNamespace;
+	QVector<Namespace*> pSearchNamespaces;
 };
 
 }

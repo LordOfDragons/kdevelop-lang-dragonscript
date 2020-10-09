@@ -115,8 +115,9 @@ void DSCodeCompletionCodeBody::completionItems(){
 		
 		EditorIntegrator editor( session );
 		DUChainReadLocker lock;
-		ExpressionVisitor exprvisitor( editor, &pContext, pCodeCompletionContext.pinnedNamespaces(),
-			pCodeCompletionContext.typeFinder(), pCodeCompletionContext.position() );
+		ExpressionVisitor exprvisitor( editor, &pContext, pCodeCompletionContext.searchNamespaces(),
+			pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace().data(),
+			pCodeCompletionContext.position() );
 		exprvisitor.visitExpression( ast );
 		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
 			qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
@@ -162,8 +163,9 @@ void DSCodeCompletionCodeBody::completionItems(){
 	
 	DUChainReadLocker lock;
 	
-	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations( pCodeCompletionContext.position(),
-		*pCompletionContext, {}, pCodeCompletionContext.typeFinder() ) );
+	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations(
+		pCodeCompletionContext.position(), *pCompletionContext, {},
+		pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace().data() ) );
 	
 // 	foreach(auto d, pAllDefinitions){
 // 		qDebug() << "CHECK" << d.first->context()->scopeIdentifier(true) << d.first->toString() << d.second;

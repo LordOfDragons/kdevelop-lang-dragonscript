@@ -163,6 +163,17 @@ void DSCodeCompletionCodeBody::completionItems(){
 	
 	DUChainReadLocker lock;
 	
+	// TODO find search namespaces. for this walk up the parents of the completion context
+	//      to find the current namespace. since this is walking upwards upwards the namespace
+	//      identifiers have to be collected into a qualified identifier. once the identifier
+	//      is found find the namespace using the root namespace and add it (including parents)
+	//      to the search namespaces.
+	//      
+	//      then find the top context of the completion context. in there find all namespace
+	//      alias declarations up to the completion location. for each alias get the fully
+	//      qualified identifier assigned to it and use it to find the namespace. as above
+	//      add the namespace and all its parents to the search context list
+	
 	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations(
 		pCodeCompletionContext.position(), *pCompletionContext, {},
 		pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace().data() ) );

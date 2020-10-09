@@ -63,9 +63,11 @@ public:
 	
 	QVector<Namespace*> &searchNamespaces(){ return pSearchNamespaces; }
 	const QVector<Namespace*> &searchNamespaces() const{ return pSearchNamespaces; }
+	void updateSearchNamespaces();
 	
 	QVector<Namespace*> &pinnedNamespaces(){ return pPinnedNamespaces; }
 	const QVector<Namespace*> &pinnedNamespaces() const{ return pPinnedNamespaces; }
+	void addPinnedUpdateNamespaces( Namespace *ns );
 	
 	inline bool requiresRebuild() const{ return pRequiresRebuild; }
 	void setRequiresRebuild( bool failed );

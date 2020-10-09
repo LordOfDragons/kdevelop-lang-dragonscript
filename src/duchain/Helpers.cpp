@@ -313,7 +313,22 @@ const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNa
 		}
 	}
 	
-	// find declaration in namespaces
+	// find declaration in namespaces. if context declaration is a namespace include context
+	if( context.owner() && ( context.owner()->kind() == Declaration::Namespace
+	|| context.owner()->kind() == Declaration::NamespaceAlias ) ){
+		Namespace *ns = rootNamespace.getNamespace( context.owner()->qualifiedIdentifier() );
+		if( ns ){
+			ClassDeclaration * const classDecl = ns->getClass( identifier );
+			if( classDecl ){
+				return classDecl;
+			}
+			ns = ns->getNamespace( identifier );
+			if( ns && ns->declaration() ){
+				return ns->declaration();
+			}
+		}
+	}
+	
 	if( ! namespaces.isEmpty() ){
 		Namespace *ns = nullptr;
 		foreach( Namespace *each, namespaces ){
@@ -321,7 +336,7 @@ const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNa
 			if( classDecl ){
 				return classDecl;
 			}
-			if( ! each ){
+			if( ! ns ){
 				ns = each->getNamespace( identifier );
 			}
 		}
@@ -424,6 +439,22 @@ Namespace &rootNamespace, bool onlyFunctions ){
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations
+	// if context declaration is a namespace include context
+	if( context.owner() && ( context.owner()->kind() == Declaration::Namespace
+	|| context.owner()->kind() == Declaration::NamespaceAlias ) ){
+		Namespace *ns = rootNamespace.getNamespace( context.owner()->qualifiedIdentifier() );
+		if( ns ){
+			ClassDeclaration * const classDecl = ns->getClass( identifier );
+			if( classDecl ){
+				declarations << classDecl;
+			}
+			ns = ns->getNamespace( identifier );
+			if( ns && ns->declaration() ){
+				declarations << ns->declaration();
+			}
+		}
+	}
+	
 	if( ! onlyFunctions && ! namespaces.isEmpty() ){
 		QVector<Declaration*> namespaceDecls;
 		foreach( Namespace *each, namespaces ){
@@ -538,6 +569,22 @@ Namespace &rootNamespace ){
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations
+	// if context declaration is a namespace include context
+	if( context.owner() && ( context.owner()->kind() == Declaration::Namespace
+	|| context.owner()->kind() == Declaration::NamespaceAlias ) ){
+		Namespace * const ns = rootNamespace.getNamespace( context.owner()->qualifiedIdentifier() );
+		if( ns ){
+			foreach( const Namespace::ClassDeclarationPointer &classDecl, ns->classes() ){
+				declarations << QPair<Declaration*, int>{ classDecl.data(), 1000 };
+			}
+			foreach( const Namespace::Ref &nsref, ns->namespaces() ){
+				if( nsref && nsref->declaration() ){
+					QPair<Declaration*, int>{ nsref->declaration(), 1000 };
+				}
+			}
+		}
+	}
+	
 	if( ! namespaces.isEmpty() ){
 		QVector<Declaration*> namespaceDecls;
 		foreach( Namespace *each, namespaces ){

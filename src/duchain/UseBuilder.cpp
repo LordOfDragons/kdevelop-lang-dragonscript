@@ -79,7 +79,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 				const IndexedIdentifier identifier( (Identifier( name )) );
 				DUChainReadLocker lock;
 				decl = Helpers::declarationForName( identifier, CursorInRevision::invalid(),
-					*context, useReachable ? pinnedNamespaces() : QVector<Namespace*>(),
+					*context, useReachable ? searchNamespaces() : QVector<Namespace*>(),
 					*typeFinder(), *rootNamespace().data() );
 			}
 			
@@ -124,8 +124,7 @@ void UseBuilder::visitPin( PinAst *node ){
 		iter = iter->next;
 	}while( iter != end );
 	
-	pinnedNamespaces() << ns;
-	searchNamespaces() << ns;
+	addPinnedUpdateNamespaces( ns );
 }
 
 void UseBuilder::visitNamespace( NamespaceAst *node ){
@@ -137,6 +136,7 @@ void UseBuilder::visitNamespace( NamespaceAst *node ){
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
+	
 	setCurNamespace( rootNamespace().data() );
 	
 	do{
@@ -144,9 +144,7 @@ void UseBuilder::visitNamespace( NamespaceAst *node ){
 		iter = iter->next;
 	}while( iter != end );
 	
-	searchNamespaces().clear();
-	searchNamespaces() << curNamespace();
-	searchNamespaces() << pinnedNamespaces();
+	updateSearchNamespaces();
 }
 
 void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ){
@@ -329,7 +327,7 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	AbstractType::Ptr type;
 	{
 	DUChainReadLocker lock;
-	ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(),
+	ExpressionVisitor exprValue( *editor(), context, searchNamespaces(),
 		*typeFinder(), *rootNamespace() );
 	exprValue.visitNode( node );
 	declaration = exprValue.lastDeclaration();
@@ -385,7 +383,7 @@ void UseBuilder::visitExpressionMember( ExpressionMemberAst *node ){
 		DUChainReadLocker lock;
 		if( context ){
 			declarations = Helpers::declarationsForName( identifier, editor()->findPosition( *node ),
-				*context, pCanBeType ? pinnedNamespaces() : QVector<Namespace*>(),
+				*context, pCanBeType ? searchNamespaces() : QVector<Namespace*>(),
 				*typeFinder(), *rootNamespace().data() );
 			
 			if( pIgnoreVariable ){
@@ -734,7 +732,7 @@ void UseBuilder::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			if( pParseSession.tokenStream()->at( iter->element->op->op ).kind == TokenType::Token_CAST ){
 				if( context ){
 					DUChainReadLocker lock;
-					ExpressionVisitor exprValue( *editor(), context, pinnedNamespaces(),
+					ExpressionVisitor exprValue( *editor(), context, searchNamespaces(),
 						*typeFinder(), *rootNamespace() );
 					exprValue.visitNode( iter->element->type );
 					const DeclarationPointer declaration( exprValue.lastDeclaration() );

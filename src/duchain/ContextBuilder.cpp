@@ -40,6 +40,37 @@ void ContextBuilder::setCurNamespace( Namespace *ns ){
 	pCurNamespace = ns;
 }
 
+void ContextBuilder::updateSearchNamespaces(){
+	pSearchNamespaces.clear();
+	
+	Namespace *addNS = pCurNamespace;
+	while( addNS && ! pSearchNamespaces.contains( addNS ) ){
+		pSearchNamespaces << addNS;
+		addNS = addNS->parent();
+	}
+	
+	foreach( Namespace *pinned, pPinnedNamespaces ){
+		addNS = pinned;
+		while( addNS && ! pSearchNamespaces.contains( addNS ) ){
+			pSearchNamespaces << addNS;
+			addNS = addNS->parent();
+		}
+	}
+}
+
+void ContextBuilder::addPinnedUpdateNamespaces( Namespace *ns ){
+	if( pPinnedNamespaces.contains( ns ) ){
+		return;
+	}
+	
+	pPinnedNamespaces << ns;
+	
+	while( ns && ! pSearchNamespaces.contains( ns ) ){
+		pSearchNamespaces << ns;
+		ns = ns->parent();
+	}
+}
+
 void ContextBuilder::setRequiresRebuild( bool rebuild ){
 	pRequiresRebuild = rebuild;
 }
@@ -53,7 +84,6 @@ void ContextBuilder::startVisiting( AstNode *node ){
 		return;
 	}
 	
-// 	qDebug() << "KDevDScript: ContextBuilder::startVisiting";
 	if( ! pDependencies.isEmpty() ){
 		DUChainWriteLocker lock;
 		foreach( const ImportPackage::Ref &each, pDependencies ){
@@ -73,13 +103,10 @@ void ContextBuilder::startVisiting( AstNode *node ){
 	// visit node to start building
 	visitNode( node );
 	closeNamespaceContexts();
-// 	qDebug() << "KDevDScript: ContextBuilder::startVisiting finished";
 }
 
 void ContextBuilder::preparePackage( ImportPackage &package ){
 // 	TopDUContext * const top = topContext();
-	
-//	qDebug() << "DSParseJob.run: add import" << each->name() << "for" << document();
 	
 	ImportPackage::State state;
 	package.contexts( state );
@@ -89,8 +116,6 @@ void ContextBuilder::preparePackage( ImportPackage &package ){
 		}
 		
 	}else{
-// 		qDebug() << "KDevDScript DeclarationBuilder: failed adding dependency"
-// 			<< each->name() << " as import for" << document();
 		pRequiresRebuild = true;
 		pReparsePriority = qMax( pReparsePriority, state.reparsePriority );
 		pWaitForFiles.unite( state.waitForFiles );
@@ -142,7 +167,6 @@ ParsingEnvironmentFile *file ){
 
 
 void ContextBuilder::closeNamespaceContexts(){
-// 	qDebug() << "KDevDScript: ContextBuilder::closeNamespaceContexts" << pNamespaceContextCount;
 	while( pNamespaceContextCount > 0 ){
 		pNamespaceContextCount--;
 		closeContext();

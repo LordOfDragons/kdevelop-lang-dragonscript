@@ -90,6 +90,8 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 	QualifiedIdentifier identifier;
 	Namespace *ns = rootNamespace().data();
 	
+	// TODO for namespace and pin add not only the final namespace to the search namespaces
+	//      but also all parent namespaces if not present already
 	{
 	DUChainReadLocker lock; // for getOrAddNamespace
 	do{
@@ -130,8 +132,7 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 		closeInjectedContext();
 	}
 	
-	pinnedNamespaces() << ns;
-	searchNamespaces() << ns;
+	addPinnedUpdateNamespaces( ns );
 }
 
 void DeclarationBuilder::visitRequires( RequiresAst *node ){
@@ -144,7 +145,6 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
 	
-	searchNamespaces().clear();
 	setCurNamespace( rootNamespace().data() );
 	
 	do{
@@ -191,8 +191,7 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		
 	}while( iter != end );
 	
-	searchNamespaces() << curNamespace();
-	searchNamespaces() << pinnedNamespaces();
+	updateSearchNamespaces();
 }
 
 void DeclarationBuilder::visitClass( ClassAst *node ){

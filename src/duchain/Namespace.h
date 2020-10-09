@@ -62,6 +62,7 @@ public:
 private:
 	Namespace *pParent;
 	IndexedIdentifier pIdentifier;
+	IndexedQualifiedIdentifier pQualifiedIdentifier;
 	TypeNamespaceMap pNamespaces;
 	TypeClassMap pClasses;
 	TypeContextList pContexts;
@@ -73,13 +74,18 @@ private:
 public:
 	Namespace( TypeFinder &typeFinder );
 	Namespace( Namespace &parent, const IndexedIdentifier &identifier );
-	~Namespace();
 	
+	inline Namespace *parent() const{ return pParent; }
+	inline const IndexedIdentifier &identifier() const{ return pIdentifier; }
+	inline const IndexedQualifiedIdentifier &qualifiedIdentifier() const{ return pQualifiedIdentifier; }
 	inline const TypeNamespaceMap &namespaces() const{ return pNamespaces; }
 	inline const TypeClassMap &classes() const{ return pClasses; }
 	
 	/** Namespace matching identifier or nullptr. */
 	Namespace *getNamespace( const IndexedIdentifier &iid );
+	
+	/** Namespace matching qualified identifier or nullptr. */
+	Namespace *getNamespace( const QualifiedIdentifier &qid );
 	
 	/** Namespace matching identifier adding it if absent. */
 	Namespace &getOrAddNamespace( const IndexedIdentifier &iid );

@@ -19,18 +19,13 @@ pDirtyContent( true )
 	foreach( const ReferencedTopDUContext &each, typeFinder.searchContexts() ){
 		pContexts << DUContextPointer( each.data() );
 	}
-	qDebug() << "constructor1" << pParent << this << pIdentifier.identifier();
 }
 
 Namespace::Namespace( Namespace &parent, const IndexedIdentifier &identifier ) :
 pParent( &parent ),
 pIdentifier( identifier ),
+pQualifiedIdentifier( parent.pQualifiedIdentifier.identifier() + identifier ),
 pDirtyContent( true ){
-	qDebug() << "constructor2" << pParent << this << pIdentifier.identifier();
-}
-
-Namespace::~Namespace(){
-	qDebug() << "destructor" << pParent << this << pIdentifier.identifier();
 }
 
 
@@ -43,12 +38,33 @@ Namespace *Namespace::getNamespace( const IndexedIdentifier &iid ){
 	const TypeNamespaceMap::const_iterator iter( pNamespaces.constFind( iid ) );
 	
 	if( iter != pNamespaces.cend() ){
-		qDebug() << "found namespace" << iter.value().data() << iter.value().data()->pIdentifier << iter.value().data()->pParent;
 		return iter.value().data();
 		
 	}else{
 		return nullptr;
 	}
+}
+
+Namespace *Namespace::getNamespace( const QualifiedIdentifier &qid ){
+	const int count = qid.count();
+	if( count == 0 ){
+		return nullptr;
+	}
+	
+	Namespace *ns = getNamespace( IndexedIdentifier( qid.first() ) );
+	if( ! ns ){
+		return nullptr;
+	}
+	
+	int i;
+	for( i=1; i<count; i++ ){
+		ns = ns->getNamespace( IndexedIdentifier( qid.at( i ) ) );
+		if( ! ns ){
+			return nullptr;
+		}
+	}
+	
+	return ns;
 }
 
 Namespace &Namespace::getOrAddNamespace( const IndexedIdentifier &iid ){
@@ -57,7 +73,6 @@ Namespace &Namespace::getOrAddNamespace( const IndexedIdentifier &iid ){
 	if( ! ns ){
 		ns = new Namespace( *this, iid );
 		pNamespaces.insert( iid, Ref( ns ) );
-		qDebug() << "create namespace" << ns << ns->pIdentifier << ns->pParent << pNamespaces.count();
 	}
 	
 	return *ns;
@@ -85,17 +100,14 @@ ClassDeclaration *Namespace::getClass( const IndexedIdentifier &iid ){
 
 
 void Namespace::findContent(){
-			qDebug() << "findContent" << pParent << pIdentifier.identifier();
 	pDirtyContent = false;
 	foreach( const DUContextPointer &context, pContexts ){
 		if( ! context ){
 			continue;
 		}
-// 				qDebug() << "context" << context->scopeIdentifier(true);
 		const QVector<Declaration*> declarations( context->localDeclarations() );
 		foreach( Declaration *decl, declarations ){
 			if( decl->kind() == Declaration::Type ){
-// 					qDebug() << "decl class" << decl->toString();
 				ClassDeclaration * const classDecl = dynamic_cast<ClassDeclaration*>( decl );
 				if( ! classDecl ){
 					continue;
@@ -110,11 +122,6 @@ void Namespace::findContent(){
 				pClasses.insert( identifier, ClassDeclarationPointer( classDecl ) );
 				
 			}else if( decl->kind() == Declaration::Namespace ){
-// 					qDebug() << "decl namespace" << decl->toString();
-				if( ! pDeclaration ){
-					pDeclaration = dynamic_cast<ClassDeclaration*>( context->owner() );
-				}
-				
 				const IndexedIdentifier &identifier = decl->indexedIdentifier();
 				if( pClasses.contains( identifier ) ){
 					// namespace with same name as a class is a bug. stick to the class
@@ -129,20 +136,20 @@ void Namespace::findContent(){
 					
 				}else{
 					ns = new Namespace( *this, identifier );
-					qDebug() << "add namespace" << this << pIdentifier << identifier << ns;
 					pNamespaces.insert( identifier, Ref( ns ) );
-					qDebug() << "count now" << pNamespaces.count();
 				}
 				
 				DUContext * const ictx = decl->internalContext();
 				if( ictx ){
-// 					qDebug() << "add context" << this << ictx->localScopeIdentifier() << ictx;
 					ns->pContexts << DUContextPointer( ictx );
+				}
+				
+				if( ! ns->pDeclaration ){
+					ns->pDeclaration = dynamic_cast<ClassDeclaration*>( decl );
 				}
 			}
 		}
 	}
-	qDebug() << "exit findContent" << pParent << pIdentifier.identifier();
 }
 
 }

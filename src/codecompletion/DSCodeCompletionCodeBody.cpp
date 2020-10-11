@@ -390,23 +390,14 @@ void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
 		}else if( item->isStatic() ){
 			pStaticItems << CompletionTreeItemPointer( item );
 			
+		}else if( item->accessType() == DSCodeCompletionItem::AccessType::Local ){
+			pLocalItems << CompletionTreeItemPointer( item );
+			
+		}else if( item->accessType() == DSCodeCompletionItem::AccessType::Global ){
+			pGlobalItems << CompletionTreeItemPointer( item );
+			
 		}else if( each.first->context() ){
-			const DUContext &context = *each.first->context();
-			switch( context.type() ){
-			case DUContext::Other:
-			case DUContext::Function:
-				pLocalItems << CompletionTreeItemPointer( item );
-				break;
-				
-			case DUContext::Class:
-			case DUContext::Enum:
-				pMemberItems << CompletionTreeItemPointer( item );
-				break;
-				
-			default:
-				pGlobalItems << CompletionTreeItemPointer( item );
-				break;
-			}
+			pMemberItems << CompletionTreeItemPointer( item );
 			
 		}else{
 			pGlobalItems << CompletionTreeItemPointer( item );

@@ -32,6 +32,8 @@ pProperties( CodeCompletionModel::NoProperty )
 {
 	const DUChainPointer<ClassMemberDeclaration> membDecl = declaration.dynamicCast<ClassMemberDeclaration>();
 	const FunctionType::Ptr funcType = declaration->type<FunctionType>();
+	const bool parentIsNamespace = declaration->context() && declaration->context()->owner()
+		&& declaration->context()->owner()->kind() == Declaration::Namespace;
 	
 	if( funcType ){
 		AbstractType::Ptr returnType = funcType->returnType();
@@ -70,9 +72,10 @@ pProperties( CodeCompletionModel::NoProperty )
 		}
 		
 		if( declaration->kind() == Declaration::Namespace ){
+			pAccessType = AccessType::Global;
 			pProperties = CodeCompletionModel::Public | CodeCompletionModel::Namespace
 				| CodeCompletionModel::NamespaceScope;
-				
+			
 		}else if( declaration->kind() == Declaration::Type ){
 			if( declaration->internalContext() ){
 				const DUContext &context = *declaration->internalContext();
@@ -97,47 +100,46 @@ pProperties( CodeCompletionModel::NoProperty )
 	}
 	
 	if( membDecl ){
-		pIsStatic = pIsConstructor || membDecl->isStatic();
-		if( pIsStatic ){
-			pProperties |= CodeCompletionModel::Static;
-		}
-		
-		if( membDecl->accessPolicy() == Declaration::Public ){
-			pAccessType = AccessType::Public;
-			pProperties |= CodeCompletionModel::Public;
-			
-		}else if( membDecl->accessPolicy() == Declaration::Protected ){
-			pAccessType = AccessType::Protected;
-			pProperties |= CodeCompletionModel::Protected;
-			
-		}else if( membDecl->accessPolicy() == Declaration::Private ){
-			pAccessType = AccessType::Private;
-			pProperties |= CodeCompletionModel::Private;
+		if( declaration->kind() == Declaration::Namespace || parentIsNamespace ){
+			pAccessType = AccessType::Global;
 			
 		}else{
-			pProperties |= CodeCompletionModel::Public;
-		}
-	}
-	
-	if( declaration->context() ){
-		switch( declaration->context()->type() ){
-		case DUContext::Other:
-		case DUContext::Function:
-			pAccessType = AccessType::Local;
-			pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
-			pProperties |= CodeCompletionModel::Public | CodeCompletionModel::LocalScope;
-			break;
+			pIsStatic = pIsConstructor || membDecl->isStatic();
+			if( pIsStatic ){
+				pProperties |= CodeCompletionModel::Static;
+			}
 			
-		case DUContext::Class:
-		case DUContext::Enum:
-			break;
+			bool isParentNamespace = false;
+			if( declaration->internalContext() && declaration->internalContext()->owner() ){
+				isParentNamespace = declaration->internalContext()->owner()->kind() == Declaration::Namespace;
+			}
 			
-		default:
-			pAccessType = AccessType::Global;
-			pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
-			pProperties |= CodeCompletionModel::Public | CodeCompletionModel::NamespaceScope;
-			break;
+			if( isParentNamespace ){
+				pAccessType = AccessType::Global;
+				pProperties = CodeCompletionModel::Public;
+				
+			}else if( membDecl->accessPolicy() == Declaration::Public ){
+				pAccessType = AccessType::Public;
+				pProperties |= CodeCompletionModel::Public;
+				
+			}else if( membDecl->accessPolicy() == Declaration::Protected ){
+				pAccessType = AccessType::Protected;
+				pProperties |= CodeCompletionModel::Protected;
+				
+			}else if( membDecl->accessPolicy() == Declaration::Private ){
+				pAccessType = AccessType::Private;
+				pProperties |= CodeCompletionModel::Private;
+				
+			}else{
+				pAccessType = AccessType::Public;
+				pProperties |= CodeCompletionModel::Public;
+			}
 		}
+		
+	}else if( declaration->context() ){
+		pAccessType = AccessType::Local;
+		pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
+		pProperties |= CodeCompletionModel::Public | CodeCompletionModel::LocalScope;
 	}
 }
 
@@ -163,7 +165,15 @@ QVariant DSCodeCompletionItem::data( const QModelIndex &index, int role, const C
 		
 	case CodeCompletionModel::MatchQuality:
 		// perfect match (10), medium match (5), no match (QVariant())
-		return 5;
+		if( pAccessType == AccessType::Local ){
+			return 5;
+			
+		}else if( pAccessType == AccessType::Global ){
+			return 0;
+			
+		}else{
+			return 3;
+		}
 	}
 	
 	return NormalDeclarationCompletionItem::data( index, role, model );

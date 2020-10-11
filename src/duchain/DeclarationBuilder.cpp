@@ -163,7 +163,7 @@ void DeclarationBuilder::visitNamespace( NamespaceAst *node ){
 		//      is closed. for this to work we create a range with the starting location
 		//      only. the closing will then extend the end location
 		// 
-		// WARNING this is utterly strange but it DUContext::Namespace is used all calls
+		// WARNING this is utterly strange but if DUContext::Namespace is used all calls
 		//         to declaration look-up functions fail to find declarations. by examining
 		//         the source code it looks "language/duchain/ducontext.cpp" struct Checker
 		//         at condition check "if (m_ownType != DUContext::Class ..." is the culprit.

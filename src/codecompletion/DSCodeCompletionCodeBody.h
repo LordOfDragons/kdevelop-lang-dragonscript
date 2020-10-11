@@ -87,6 +87,7 @@ public:
 	
 protected:
 	void addItemGroupNotEmpty( const char *name, int priority, const QList<CompletionTreeItemPointer> &items );
+	static bool compareDeclarations( const CompletionTreeItemPointer &a, const CompletionTreeItemPointer &b );
 	
 	
 	
@@ -101,9 +102,12 @@ private:
 	const DUContext *pCompletionContext;
 	QVector<QPair<Declaration*, int>> pAllDefinitions;
 	
+	QList<CompletionTreeItemPointer> pLocalItems;
+	QList<CompletionTreeItemPointer> pMemberItems;
 	QList<CompletionTreeItemPointer> pConstructorItems;
 	QList<CompletionTreeItemPointer> pOperatorItems;
 	QList<CompletionTreeItemPointer> pStaticItems;
+	QList<CompletionTreeItemPointer> pGlobalItems;
 };
 
 }

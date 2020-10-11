@@ -171,7 +171,8 @@ public:
 	 **/
 	static Declaration *declarationForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context, 
-		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace );
+		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder,
+		Namespace &rootNamespace, bool withGlobal = true );
 	
 	/**
 	 * Find first matching declaration in base classes only.
@@ -187,7 +188,7 @@ public:
 	static QVector<Declaration*> declarationsForName( const IndexedIdentifier &identifier,
 		const CursorInRevision& location, const DUContext &context,
 		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder,
-		Namespace &rootNamespace, bool onlyFunctions = false );
+		Namespace &rootNamespace, bool onlyFunctions = false, bool withGlobal = true );
 	
 	/**
 	 * Find all matching declarations in base classes only.
@@ -203,7 +204,7 @@ public:
 	 **/
 	static QVector<QPair<Declaration*, int>> allDeclarations( const CursorInRevision& location,
 		const DUContext &context, const QVector<Namespace*> &namespaces,
-		TypeFinder &typeFinder, Namespace &rootNamespace );
+		TypeFinder &typeFinder, Namespace &rootNamespace, bool withGlobal );
 	
 	/**
 	 * Find all declarations in base classes only.

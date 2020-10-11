@@ -533,7 +533,7 @@ const QVector<AbstractType::Ptr> &signature, bool staticOnly ){
 	}else{
 		declarations = Helpers::declarationsForName(
 			IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-			CursorInRevision::invalid(), ctx, {}, pTypeFinder, pRootNamespace, true );
+			CursorInRevision::invalid(), ctx, {}, pTypeFinder, pRootNamespace, true, false );
 	}
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){

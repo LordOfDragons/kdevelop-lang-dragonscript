@@ -12,6 +12,14 @@ namespace DragonScript {
 
 class DSCodeCompletionItem : public NormalDeclarationCompletionItem{
 public:
+	enum class AccessType{
+		Local,
+		Public,
+		Protected,
+		Private,
+		Global
+	};
+	
 	DSCodeCompletionItem( DeclarationPointer declaration, int depth );
 	
 	
@@ -23,6 +31,7 @@ public:
 	inline bool isOperator() const{ return pIsOperator; }
 	inline bool isStatic() const{ return pIsStatic; }
 	inline bool isType() const{ return pIsType; }
+	inline AccessType accessType() const{ return pAccessType; }
 	
 	
 	
@@ -39,13 +48,18 @@ protected:
 	 */
 	QString lineIndent( KTextEditor::View &view, int line ) const;
 	
+	CodeCompletionModel::CompletionProperties completionProperties() const override;
+	
+	
+	
 private:
 	QString pPrefix;
-	CodeCompletionModel::CompletionProperties pCompletionProperties;
 	bool pIsConstructor;
 	bool pIsOperator;
 	bool pIsStatic;
 	bool pIsType;
+	AccessType pAccessType;
+	CodeCompletionModel::CompletionProperties pProperties;
 };
 
 }

@@ -171,21 +171,57 @@ void DSCodeCompletionCodeBody::completionItems(){
 	
 	DUChainReadLocker lock;
 	
-	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations( completionPosition,
-		*pCompletionContext, {}, pCodeCompletionContext.typeFinder(),
-		*pCodeCompletionContext.rootNamespace().data() ) );
+	if( completionDecl->kind() == Declaration::Namespace ){
+		Namespace * const ns = pCodeCompletionContext.rootNamespace()->
+			getNamespace( completionDecl->qualifiedIdentifier() );
+		if( ! ns ){
+			pCompletionContext = nullptr;
+			return;
+		}
+		
+		foreach( const Namespace::ClassDeclarationPointer &each, ns->classes() ){
+			pAllDefinitions << QPair<Declaration*, int>{ each.data(), 0 };
+		}
+		foreach( auto each, ns->namespaces() ){
+			if( each->declaration() ){
+				pAllDefinitions << QPair<Declaration*, int>{ each->declaration(), 0 };
+			}
+		}
+		
+		mode = Mode::type;
+		
+	}else{
+		pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations(
+			completionPosition, *pCompletionContext,
+			firstWord ? pCodeCompletionContext.searchNamespaces() : QVector<Namespace*>(),
+			pCodeCompletionContext.typeFinder(),
+			*pCodeCompletionContext.rootNamespace().data(), firstWord ) );
+	}
 	
 	addFunctionCalls();
 	addAllMembers( mode );
 // 	addAllTypes();
 	
+	// sort items
+	/* not working... why?
+	std::sort( pLocalItems.begin(), pLocalItems.end(), compareDeclarations );
+	std::sort( pMemberItems.begin(), pMemberItems.end(), compareDeclarations );
+	std::sort( pOperatorItems.begin(), pOperatorItems.end(), compareDeclarations );
+	std::sort( pConstructorItems.begin(), pConstructorItems.end(), compareDeclarations );
+	std::sort( pStaticItems.begin(), pStaticItems.end(), compareDeclarations );
+	std::sort( pGlobalItems.begin(), pGlobalItems.end(), compareDeclarations );
+	*/
+	
 	// add item groups
 	// 
 	// NOTE: it seems CompletionCustomGroupNode messes up in the UI if it has no items.
 	//       not creating the group seems to be the only working fix for this problem
+	addItemGroupNotEmpty( "Local", 100, pLocalItems );
+	addItemGroupNotEmpty( "Class Members", 200, pMemberItems );
 	addItemGroupNotEmpty( "Operators", 300, pOperatorItems );
 	addItemGroupNotEmpty( "Object Construction", 350, pConstructorItems );
 	addItemGroupNotEmpty( "Class Static", 400, pStaticItems );
+	addItemGroupNotEmpty( "Global", 1000, pGlobalItems );
 }
 
 void DSCodeCompletionCodeBody::copyTokens( const TokenStream &in, TokenStream &out, int start, int end ){
@@ -310,6 +346,12 @@ void DSCodeCompletionCodeBody::addFunctionCalls(){
 }
 
 void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
+	ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *pCompletionContext );
+	DUContext *classContext = nullptr;
+	if( classDecl ){
+		classContext = classDecl->internalContext();
+	}
+	
 	foreach( auto each, pAllDefinitions ){
 		DSCodeCompletionItem * const item = new DSCodeCompletionItem( DeclarationPointer( each.first ), each.second );
 		DUContext * const declContext = each.first->context();
@@ -318,14 +360,12 @@ void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
 		switch( mode ){
 		case Mode::type:
 			ignore = ( ! item->isType() && ! item->isStatic() )
-				|| ! declContext->parentContext()
-				|| declContext->parentContextOf( pCompletionContext->parentContext() );
+				|| ! declContext->parentContext();
 			break;
 			
 		case Mode::instance:
 			ignore = ( item->isType() || item->isConstructor() )
-				|| ! declContext->parentContext()
-				|| declContext->parentContextOf( pCompletionContext->parentContext() );
+				|| ! declContext->parentContext();
 			break;
 			
 		default:
@@ -350,8 +390,26 @@ void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
 		}else if( item->isStatic() ){
 			pStaticItems << CompletionTreeItemPointer( item );
 			
+		}else if( each.first->context() ){
+			const DUContext &context = *each.first->context();
+			switch( context.type() ){
+			case DUContext::Other:
+			case DUContext::Function:
+				pLocalItems << CompletionTreeItemPointer( item );
+				break;
+				
+			case DUContext::Class:
+			case DUContext::Enum:
+				pMemberItems << CompletionTreeItemPointer( item );
+				break;
+				
+			default:
+				pGlobalItems << CompletionTreeItemPointer( item );
+				break;
+			}
+			
 		}else{
-			pCompletionItems << CompletionTreeItemPointer( item );
+			pGlobalItems << CompletionTreeItemPointer( item );
 		}
 	}
 }
@@ -382,6 +440,11 @@ const QList<CompletionTreeItemPointer> &items ){
 	CompletionCustomGroupNode * const group = new CompletionCustomGroupNode( name, priority );
 	group->appendChildren( items );
 	pCodeCompletionContext.addItemGroup( CompletionTreeElementPointer( group ) );
+}
+
+bool DSCodeCompletionCodeBody::compareDeclarations(
+const CompletionTreeItemPointer &a, const CompletionTreeItemPointer &b ){
+	return a->declaration()->toString().compare( b->declaration()->toString(), Qt::CaseInsensitive ) < 0;
 }
 
 }

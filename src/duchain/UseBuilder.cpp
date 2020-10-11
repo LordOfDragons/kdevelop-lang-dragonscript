@@ -948,7 +948,7 @@ void UseBuilder::checkFunctionCall( AstNode *node, DUContext *context, const QVe
 			
 		}else{
 			declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(),
-				*context, {}, *typeFinder(), *rootNamespace(), true );
+				*context, {}, *typeFinder(), *rootNamespace(), true, false );
 		}
 	}
 	

@@ -78,11 +78,13 @@ public:
 	inline Namespace *parent() const{ return pParent; }
 	inline const IndexedIdentifier &identifier() const{ return pIdentifier; }
 	inline const IndexedQualifiedIdentifier &qualifiedIdentifier() const{ return pQualifiedIdentifier; }
-	inline const TypeNamespaceMap &namespaces() const{ return pNamespaces; }
-	inline const TypeClassMap &classes() const{ return pClasses; }
+	
+	const TypeNamespaceMap &namespaces();
+	const TypeClassMap &classes();
 	
 	/** Namespace matching identifier or nullptr. */
 	Namespace *getNamespace( const IndexedIdentifier &iid );
+	Namespace *getNamespace( const QString &name );
 	
 	/** Namespace matching qualified identifier or nullptr. */
 	Namespace *getNamespace( const QualifiedIdentifier &qid );

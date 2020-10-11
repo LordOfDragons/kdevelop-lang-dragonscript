@@ -26,14 +26,14 @@ NormalDeclarationCompletionItem( declaration, QExplicitlySharedDataPointer<CodeC
 pIsConstructor( false ),
 pIsOperator( false ),
 pIsStatic( false ),
-pIsType( declaration->kind() == Declaration::Kind::Type )
+pIsType( declaration->kind() == Declaration::Kind::Type || declaration->kind() == Declaration::Namespace ),
+pAccessType( AccessType::Local ),
+pProperties( CodeCompletionModel::NoProperty )
 {
 	const DUChainPointer<ClassMemberDeclaration> membDecl = declaration.dynamicCast<ClassMemberDeclaration>();
 	const FunctionType::Ptr funcType = declaration->type<FunctionType>();
 	
 	if( funcType ){
-		pCompletionProperties = CodeCompletionModel::Function;
-		
 		AbstractType::Ptr returnType = funcType->returnType();
 		if( returnType ){
 			pPrefix = returnType->toString();
@@ -59,12 +59,85 @@ pIsType( declaration->kind() == Declaration::Kind::Type )
 			pIsOperator = operatorNames.contains( declaration->identifier().toString() );
 		}
 		
-	}else if( declaration->abstractType() ){
-		pPrefix = declaration->abstractType()->toString();
+		pProperties = CodeCompletionModel::Function | CodeCompletionModel::Virtual;
+		
+		// CodeCompletionModel::Override can be used to signal an overriden function
+		// TODO figure out when to add this flag somehow
+		
+	}else{
+		if( declaration->abstractType() ){
+			pPrefix = declaration->abstractType()->toString();
+		}
+		
+		if( declaration->kind() == Declaration::Namespace ){
+			pProperties = CodeCompletionModel::Public | CodeCompletionModel::Namespace
+				| CodeCompletionModel::NamespaceScope;
+				
+		}else if( declaration->kind() == Declaration::Type ){
+			if( declaration->internalContext() ){
+				const DUContext &context = *declaration->internalContext();
+				if( context.type() == DUContext::Class ){
+					pProperties = CodeCompletionModel::Class;
+					
+					DUChainPointer<ClassDeclaration> classDecl( declaration.dynamicCast<ClassDeclaration>() );
+					if( classDecl ){
+						if( classDecl->classType() == ClassDeclarationData::Interface ){
+							pProperties |= CodeCompletionModel::Virtual;
+						}
+					}
+					
+				}else if( context.type() == DUContext::Enum ){
+					pProperties = CodeCompletionModel::Enum;
+				}
+			}
+			
+		}else{
+			pProperties |= CodeCompletionModel::Variable;
+		}
 	}
 	
 	if( membDecl ){
 		pIsStatic = pIsConstructor || membDecl->isStatic();
+		if( pIsStatic ){
+			pProperties |= CodeCompletionModel::Static;
+		}
+		
+		if( membDecl->accessPolicy() == Declaration::Public ){
+			pAccessType = AccessType::Public;
+			pProperties |= CodeCompletionModel::Public;
+			
+		}else if( membDecl->accessPolicy() == Declaration::Protected ){
+			pAccessType = AccessType::Protected;
+			pProperties |= CodeCompletionModel::Protected;
+			
+		}else if( membDecl->accessPolicy() == Declaration::Private ){
+			pAccessType = AccessType::Private;
+			pProperties |= CodeCompletionModel::Private;
+			
+		}else{
+			pProperties |= CodeCompletionModel::Public;
+		}
+	}
+	
+	if( declaration->context() ){
+		switch( declaration->context()->type() ){
+		case DUContext::Other:
+		case DUContext::Function:
+			pAccessType = AccessType::Local;
+			pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
+			pProperties |= CodeCompletionModel::Public | CodeCompletionModel::LocalScope;
+			break;
+			
+		case DUContext::Class:
+		case DUContext::Enum:
+			break;
+			
+		default:
+			pAccessType = AccessType::Global;
+			pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
+			pProperties |= CodeCompletionModel::Public | CodeCompletionModel::NamespaceScope;
+			break;
+		}
 	}
 }
 
@@ -194,6 +267,12 @@ QString DSCodeCompletionItem::lineIndent( KTextEditor::View &view, int line ) co
 	}
 	
 	return lineText.left( i );
+}
+
+CodeCompletionModel::CompletionProperties DSCodeCompletionItem::completionProperties() const{
+	// the properties calculate by NormalDeclarationCompletionItem are off for some reason
+	// so we have to calculate them here on our own
+	return pProperties;
 }
 
 }

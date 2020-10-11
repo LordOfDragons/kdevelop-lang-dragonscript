@@ -30,6 +30,20 @@ pDirtyContent( true ){
 
 
 
+const Namespace::TypeNamespaceMap &Namespace::namespaces(){
+	if( pDirtyContent ){
+		findContent();
+	}
+	return pNamespaces;
+}
+
+const Namespace::TypeClassMap &Namespace::classes(){
+	if( pDirtyContent ){
+		findContent();
+	}
+	return pClasses;
+}
+
 Namespace *Namespace::getNamespace( const IndexedIdentifier &iid ){
 	if( pDirtyContent ){
 		findContent();
@@ -43,6 +57,10 @@ Namespace *Namespace::getNamespace( const IndexedIdentifier &iid ){
 	}else{
 		return nullptr;
 	}
+}
+
+Namespace *Namespace::getNamespace( const QString &name ){
+	return getNamespace( IndexedIdentifier( Identifier( name ) ) );
 }
 
 Namespace *Namespace::getNamespace( const QualifiedIdentifier &qid ){

@@ -33,6 +33,7 @@ DynamicLanguageExpressionVisitor( ctx ),
 pEditor( editorIntegrator ),
 pCursorOffset( cursorOffset ),
 pTypeFinder( typeFinder ),
+pLastContext( nullptr ),
 pIsTypeName( false ),
 pSearchNamespaces( searchNamespaces ),
 pRootNamespace( rootNamespace )
@@ -50,36 +51,6 @@ void ExpressionVisitor::setAllowVoid( bool allowVoid ){
 bool ExpressionVisitor::isLastAlias() const{
 	Declaration * const d = m_lastDeclaration.data();
 	return d && ( dynamic_cast<AliasDeclaration*>( d ) || dynamic_cast<ClassDeclaration*>( d ) );
-}
-
-const DUContext *ExpressionVisitor::lastContext() const{
-	// no type has been encountered so far. this check works only with m_lastType.
-	// m_lastDeclaration can be nullptr also later on
-	if( ! m_lastType ){
-		return m_context;
-		/*
-		ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *m_context );
-		if( ! classDecl ){
-			return nullptr;
-		}
-		return classDecl->internalContext();
-		*/
-	}
-	
-	// find context for type. this is a mess and needs trial and error
-	DUContext *ctx = pTypeFinder.contextFor( m_lastType );
-	if( ctx ){
-		return ctx;
-	}
-	
-	if( m_lastDeclaration ){
-		ctx = m_lastDeclaration->internalContext();
-		if( ctx ){
-			return ctx;
-		}
-	}
-	
-	return nullptr;
 }
 
 
@@ -109,6 +80,7 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		
 	case TokenType::Token_NULL:
 		encounter( Helpers::getTypeNull() );
+		pLastContext = nullptr;
 		pIsTypeName = false;
 		break;
 		
@@ -116,6 +88,9 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		ClassDeclaration * const d = Helpers::thisClassDeclFor( *m_context );
 		if( d ){
 			encounterDecl( *d );
+			
+		}else{
+			encounterInvalid();
 		}
 		}break;
 		
@@ -123,12 +98,14 @@ void ExpressionVisitor::visitExpressionConstant( ExpressionConstantAst *node ){
 		ClassDeclaration * const d = Helpers::superClassDeclFor( *m_context, pTypeFinder );
 		if( d ){
 			encounterDecl( *d );
+			
+		}else{
+			encounterInvalid();
 		}
 		}break;
 		
 	default:
-		encounterUnknown(); // should never happen
-		pIsTypeName = false;
+		encounterInvalid(); // should never happen
 	}
 }
 
@@ -149,9 +126,8 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 		Declaration *decl = nullptr;
 		
 		if( checkForVoid && name == "void" ){
-			encounter( Helpers::getTypeVoid() );
+			encounterVoid();
 			searchContext = nullptr;
-			pIsTypeName = true;
 			
 		}else{
 			if( searchContext ){
@@ -165,13 +141,12 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 				if( m_reportUnknownNames ){
 					addUnknownName( name );
 				}
-				encounterUnknown();
-				pIsTypeName = false;
+				encounterInvalid();
 				return;
 			}
 			
 			encounterDecl( *decl );
-			searchContext = decl->internalContext();
+			searchContext = pLastContext;
 			pIsTypeName = true;
 		}
 		
@@ -182,32 +157,14 @@ void ExpressionVisitor::visitFullyQualifiedClassname( FullyQualifiedClassnameAst
 }
 
 void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
-	const DUContext *ctx = lastContext();
-	if( ! ctx ){
-		encounterUnknown();
-		pIsTypeName = false;
-		return;
-	}
-	
-	if( pIsTypeName ){
-		// base object is a type so find an inner type
-		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
-		Declaration * const decl = Helpers::declarationForName( identifier,
-			pCursorOffset + pEditor.findPosition( *node->name ), *ctx,
-			pSearchNamespaces, pTypeFinder, pRootNamespace );
-		
-		if( decl ){
-			encounterDecl( *decl );
-			pIsTypeName = true;
-			
-		}else{
-			encounterUnknown();
-			pIsTypeName = false;
-		}
-		return;
-	}
+	const DUContext * const ctx = pLastContext ? pLastContext : m_context;
 	
 	if( node->funcCall != -1 ){
+		if( ! ctx ){
+			encounterInvalid();
+			return;
+		}
+		
 		QVector<AbstractType::Ptr> signature;
 		
 		if( node->argumentsSequence ){
@@ -222,11 +179,32 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 			}while( iter != end );
 		}
 		
-		checkFunctionCall( *node->name, *ctx, signature );
+		checkFunctionCall( *node->name, *ctx, signature, pIsTypeName );
+		
+	}else if( pIsTypeName ){
+		if( ! ctx ){
+			encounterInvalid();
+			return;
+		}
+		
+		// base object is a type so find an inner type
+		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
+		Declaration * const decl = Helpers::declarationForName( identifier,
+			pCursorOffset + pEditor.findPosition( *node->name ), *ctx,
+			pSearchNamespaces, pTypeFinder, pRootNamespace );
+		
+		if( decl ){
+			encounterDecl( *decl );
+			pIsTypeName = true;
+			
+		}else{
+			encounterInvalid();
+		}
 		
 	}else{
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		QVector<Declaration*> declarations;
+		
 		if( ctx ){
 			declarations = Helpers::declarationsForName( identifier,
 				pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
@@ -239,32 +217,29 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 			if( ctx && ! dynamic_cast<ClassDeclaration*>( ctx->owner() ) ){
 				const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *ctx );
 				if( classDecl ){
-					ctx = classDecl->internalContext();
-					if( ctx ){
+					DUContext * const classContext = classDecl->internalContext();
+					if( classContext ){
 						//declarations = Helpers::declarationsForName( identifier, CursorInRevision::invalid(), *ctx );
 						declarations = Helpers::declarationsForName( identifier,
 							pCursorOffset + pEditor.findPosition( *node, EditorIntegrator::BackEdge ),
-							*ctx, pSearchNamespaces, pTypeFinder, pRootNamespace );
+							*classContext, pSearchNamespaces, pTypeFinder, pRootNamespace );
 					}
 				}
 			}
 		}
 		
 		if( declarations.isEmpty() ){
-			encounterUnknown();
-			pIsTypeName = false;
+			encounterInvalid();
 			return;
 		}
 		
 		Declaration * const decl = declarations.first();
 		if( dynamic_cast<ClassFunctionDeclaration*>( decl ) ){
-			encounterUnknown();
-			pIsTypeName = false;
+			encounterInvalid();
 			return;
 		}
 		
 		encounterDecl( *decl );
-		
 		pIsTypeName = decl->kind() == Declaration::Kind::Type;
 	}
 }
@@ -277,7 +252,7 @@ void ExpressionVisitor::visitExpressionAddition( ExpressionAdditionAst *node ){
 	const KDevPG::ListNode<ExpressionAdditionMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionAdditionMoreAst*> *end = iter;
 	do{
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
 			return;
 		}
@@ -304,7 +279,7 @@ void ExpressionVisitor::visitExpressionBitOperation( ExpressionBitOperationAst *
 	const KDevPG::ListNode<ExpressionBitOperationMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionBitOperationMoreAst*> *end = iter;
 	do{
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
 			return;
 		}
@@ -322,7 +297,7 @@ void ExpressionVisitor::visitExpressionCompare( ExpressionCompareAst *node ){
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionCompareMoreAst*> *end = iter;
 	do{
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
 			return;
 		}
@@ -349,7 +324,7 @@ void ExpressionVisitor::visitExpressionMultiply( ExpressionMultiplyAst *node ){
 	const KDevPG::ListNode<ExpressionMultiplyMoreAst*> *iter = node->moreSequence->front();
 	const KDevPG::ListNode<ExpressionMultiplyMoreAst*> *end = iter;
 	do{
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx || ! clearVisitNode( iter->element->right ) ){
 			return;
 		}
@@ -367,7 +342,7 @@ void ExpressionVisitor::visitExpressionPostfix( ExpressionPostfixAst *node ){
 	const KDevPG::ListNode<ExpressionPostfixOpAst*> *iter = node->opSequence->front();
 	const KDevPG::ListNode<ExpressionPostfixOpAst*> *end = iter;
 	do{
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx ){
 			return;
 		}
@@ -387,14 +362,13 @@ void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
 	
 	do{
 		if( ! iter->element->op || iter->element->op->op == -1 ){
-			encounterUnknown(); // should never happen
-			pIsTypeName = false;
+			encounterInvalid(); // should never happen
 			return;
 		}
 		
 		switch( pEditor.session().tokenStream()->at( iter->element->op->op ).kind ){
 		case TokenType::Token_CAST:{
-			const DUContext *ctx = lastContext();
+			const DUContext *ctx = pLastContext;
 			if( ! ctx || ! clearVisitNode( iter->element->type ) ){
 				return;
 			}
@@ -407,8 +381,7 @@ void ExpressionVisitor::visitExpressionSpecial( ExpressionSpecialAst *node ){
 			break;
 			
 		default:
-			encounterUnknown(); // should never happen
-			pIsTypeName = false;
+			encounterInvalid(); // should never happen
 			return;
 		}
 		
@@ -430,7 +403,7 @@ void ExpressionVisitor::visitExpressionUnary( ExpressionUnaryAst *node ){
 	}while( iter != end );
 	
 	foreach( ExpressionUnaryOpAst *each, sequence ){
-		const DUContext *ctx = lastContext();
+		const DUContext *ctx = pLastContext;
 		if( ! ctx ){
 			return;
 		}
@@ -449,48 +422,59 @@ void ExpressionVisitor::visitExpressionInlineIfElse( ExpressionInlineIfElseAst *
 }
 
 void ExpressionVisitor::visitStatementFor( StatementForAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementIf( StatementIfAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementReturn( StatementReturnAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementSelect( StatementSelectAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementThrow( StatementThrowAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementTry( StatementTryAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementVariableDefinitions( StatementVariableDefinitionsAst* ){
-	encounterUnknown(); // void
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 void ExpressionVisitor::visitStatementWhile( StatementWhileAst* ){
-	encounterUnknown(); // void
+	encounterInvalid();
+}
+
+void ExpressionVisitor::encounterInvalid(){
+	encounterUnknown();
+	pLastContext = nullptr;
 	pIsTypeName = false;
+}
+
+void ExpressionVisitor::encounterVoid(){
+	encounter( Helpers::getTypeVoid() );
+	pLastContext = nullptr;
+	pIsTypeName = true;
 }
 
 void ExpressionVisitor::encounterDecl( Declaration &decl ){
 	encounter( decl.abstractType(), DeclarationPointer( &decl ) );
 	pIsTypeName = false;
+	
+	if( decl.abstractType() ){
+		pLastContext = pTypeFinder.contextFor( decl.abstractType() );
+		
+	}else{
+		pLastContext = nullptr;
+	}
 }
 
 void ExpressionVisitor::encounterInternalType( ClassDeclaration *classDecl ){
@@ -498,40 +482,69 @@ void ExpressionVisitor::encounterInternalType( ClassDeclaration *classDecl ){
 		encounterDecl( *classDecl );
 		
 	}else{
-		encounterUnknown();
-		pIsTypeName = false;
+		encounterInvalid();
+	}
+}
+
+void ExpressionVisitor::encounterFunction( ClassFunctionDeclaration *funcDecl ){
+	if( ! funcDecl ){
+		encounterInvalid();
+		return;
+	}
+	
+	const TypePtr<FunctionType> funcType = funcDecl->type<FunctionType>();
+	if( ! funcType ){
+		encounterInvalid(); // should never happen
+		return;
+	}
+	
+	encounter( funcType->returnType(), DeclarationPointer( funcDecl ) );
+	pIsTypeName = false;
+	
+	if( funcType->returnType() ){
+		pLastContext = pTypeFinder.contextFor( funcType->returnType() );
+		
+	}else{
+		pLastContext = nullptr;
 	}
 }
 
 void ExpressionVisitor::checkFunctionCall( AstNode &node, const DUContext &context,
-const AbstractType::Ptr &argument ){
+const AbstractType::Ptr &argument, bool staticOnly ){
 	QVector<AbstractType::Ptr> signature;
 	signature.append( argument );
-	checkFunctionCall( node, context, signature );
+	checkFunctionCall( node, context, signature, staticOnly );
 	pIsTypeName = false;
 }
 
 void ExpressionVisitor::checkFunctionCall( AstNode &node, const DUContext &ctx,
-const QVector<AbstractType::Ptr> &signature ){
+const QVector<AbstractType::Ptr> &signature, bool staticOnly ){
 	QVector<Declaration*> declarations;
 	
-	//declarations = Helpers::declarationsForName( pEditor.tokenText( *node ), CursorInRevision::invalid(), ctx );
-	declarations = Helpers::declarationsForName(
-		IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
-		pCursorOffset + pEditor.findPosition( node, EditorIntegrator::BackEdge ),
-		ctx, {}, pTypeFinder, pRootNamespace );
+	if( staticOnly ){
+		const QList<Declaration*> list( ctx.findLocalDeclarations( Identifier( pEditor.tokenText( node ) ) ) );
+		foreach( Declaration *each, list ){
+			ClassMemberDeclaration * const memberDecl = dynamic_cast<ClassMemberDeclaration*>( each );
+			if( memberDecl && memberDecl->isStatic() ){
+				declarations << each;
+			}
+		}
+		
+	}else{
+		declarations = Helpers::declarationsForName(
+			IndexedIdentifier( Identifier( pEditor.tokenText( node ) ) ),
+			CursorInRevision::invalid(), ctx, {}, pTypeFinder, pRootNamespace, true );
+	}
 	
 	if( declarations.isEmpty() || ! dynamic_cast<ClassFunctionDeclaration*>( declarations.first() ) ){
-		encounterUnknown();
-		pIsTypeName = false;
+		encounterInvalid();
 		return;
 	}
 	
 	// find best matching function
 	ClassFunctionDeclaration *useFunction = Helpers::bestMatchingFunction( signature, declarations );
 	if( useFunction ){
-		encounter( useFunction->type<FunctionType>()->returnType(), DeclarationPointer( useFunction ) );
-		pIsTypeName = false;
+		encounterFunction( useFunction );
 		return;
 	}
 	
@@ -541,19 +554,18 @@ const QVector<AbstractType::Ptr> &signature ){
 	if( ! possibleFunctions.isEmpty() ){
 		useFunction = possibleFunctions.first();
 		if( useFunction ){
-			encounter( useFunction->type<FunctionType>()->returnType(), DeclarationPointer( useFunction ) );
-			pIsTypeName = false;
+			encounterFunction( useFunction );
 			return;
 		}
 	}
 	
-	encounterUnknown();
-	pIsTypeName = false;
+	encounterInvalid();
 }
 
 bool ExpressionVisitor::clearVisitNode( AstNode *node ){
-	m_lastType = nullptr; // important or lastContext() calls will fail
-	m_lastDeclaration = nullptr; // important or lastContext() calls will fail
+	m_lastType = nullptr;
+	m_lastDeclaration = nullptr;
+	pLastContext = nullptr;
 	
 	if( node ){
 		visitNode( node );
@@ -562,8 +574,7 @@ bool ExpressionVisitor::clearVisitNode( AstNode *node ){
 		}
 	}
 	
-	encounterUnknown();
-	pIsTypeName = false;
+	encounterInvalid();
 	return false;
 }
 

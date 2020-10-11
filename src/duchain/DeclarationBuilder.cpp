@@ -85,48 +85,42 @@ void DeclarationBuilder::visitPin( PinAst *node ){
 	}
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->name->nameSequence->front();
-	QList<QPair<IdentifierAst*, QualifiedIdentifier>> aliases;
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
-	QualifiedIdentifier identifier;
 	Namespace *ns = rootNamespace().data();
+	QualifiedIdentifier identifier;
 	
-	// TODO for namespace and pin add not only the final namespace to the search namespaces
-	//      but also all parent namespaces if not present already
 	{
 	DUChainReadLocker lock; // for getOrAddNamespace
 	do{
 		const IndexedIdentifier indexed( Identifier( editor()->tokenText( *iter->element ) ) );
 		identifier += indexed;
-		aliases.insert( 0, QPair<IdentifierAst*, QualifiedIdentifier>( iter->element, identifier ) );
-		iter = iter->next;
-		
 		ns = &ns->getOrAddNamespace( indexed );
+		iter = iter->next;
 	}while( iter != end );
 	}
 	
-	// dragonscript allows searching in parent namespaces of pinned namespaces.
-	// to get this working we need an alias definition for the pinned namespace
-	// as well as for all parent namespaces. to get the right search order the
-	// alias definitions have to be done in reverse order
-	if( ! aliases.isEmpty() ){
+	// dragonscript allows searching in parent namespaces of pinned namespaces. duchain can
+	// not handle this so an own namespace handling is implemented. we would not need
+	// declarations for this in the builders but code completion needs the information.
+	// hence one namespace alias declaration is added for each pin. the use builder is
+	// going to add individual uses for each part of the namespace but code completion
+	// needs one declaration for the entire alias
+	if( ! identifier.isEmpty() ){
 		// we have to temporarily switch to global scope otherwise the declarations end
 		// up in the wrong context
 		injectContext( topContext() );
 		
-		QList<QPair<IdentifierAst*, QualifiedIdentifier>>::const_iterator iterAlias;
-		for( iterAlias = aliases.cbegin(); iterAlias != aliases.cend(); iterAlias++ ){
-			const RangeInRevision range( editorFindRangeNode( iterAlias->first ) );
-			NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
-				globalImportIdentifier(), range, DeclarationFlags::NoFlags );
-			eventuallyAssignInternalContext();
-			decl->setKind( Declaration::NamespaceAlias );
-			decl->setImportIdentifier( iterAlias->second );
-			decl->setIdentifier( iterAlias->second.last() );
-			//openContext( iter->element, range, DUContext::Namespace, iterAlias->second );
-			//closeContext();
-			//eventuallyAssignInternalContext();
-			closeDeclaration();
-		}
+		const RangeInRevision range( editorFindRangeNode( node->name ) );
+		NamespaceAliasDeclaration * const decl = openDeclaration<NamespaceAliasDeclaration>(
+			globalImportIdentifier(), range, DeclarationFlags::NoFlags );
+		eventuallyAssignInternalContext();
+		decl->setKind( Declaration::NamespaceAlias );
+		decl->setImportIdentifier( identifier );
+// 		decl->setIdentifier( identifier.last() );
+		//openContext( iter->element, range, DUContext::Namespace, iterAlias->second );
+		//closeContext();
+		//eventuallyAssignInternalContext();
+		closeDeclaration();
 		
 		// revert back to the open namespace
 		closeInjectedContext();
@@ -361,7 +355,8 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 		// not existing anymore. anyways a special type in dragonscript
 // 		storageSpecifiers |= ClassMemberDeclaration::NativeSpecifier;
 	}
-	if( ( pLastModifiers & etmStatic ) == etmStatic ){
+	if( ( pLastModifiers & etmStatic ) == etmStatic
+	|| decl->indexedIdentifier() == Helpers::nameConstructor() ){
 		storageSpecifiers |= ClassMemberDeclaration::StaticSpecifier;
 	}
 	if( ( pLastModifiers & etmFixed ) == etmFixed ){

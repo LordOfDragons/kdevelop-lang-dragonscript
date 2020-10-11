@@ -80,6 +80,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		*/
 	
 	const Declaration *completionDecl = nullptr;
+	CursorInRevision completionPosition;
 	AbstractType::Ptr completionType;
 	Mode mode = Mode::everything;
 	
@@ -116,7 +117,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		EditorIntegrator editor( session );
 		DUChainReadLocker lock;
 		ExpressionVisitor exprvisitor( editor, &pContext, pCodeCompletionContext.searchNamespaces(),
-			pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace().data(),
+			pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace(),
 			pCodeCompletionContext.position() );
 		exprvisitor.visitExpression( ast );
 		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
@@ -134,6 +135,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		completionType = exprvisitor.lastType();
 		completionDecl = exprvisitor.lastDeclaration().data();
 		pCompletionContext = exprvisitor.lastContext();
+		completionPosition = CursorInRevision::invalid();
 		
 		if( exprvisitor.isTypeName() ){
 			mode = Mode::type;
@@ -150,6 +152,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 		if( completionDecl ){
 			completionType = completionDecl->abstractType();
 		}
+		completionPosition = pCodeCompletionContext.position();
 	}
 	
 	if( ! completionDecl || ! completionType || ! pCompletionContext ){
@@ -159,28 +162,13 @@ void DSCodeCompletionCodeBody::completionItems(){
 	}
 	
 	// do completion
-	qDebug() << "DSCodeCompletionCodeBody: completion context " << completionDecl->toString();
+	qDebug() << "DSCodeCompletionCodeBody: completion context" << completionDecl->toString();
 	
 	DUChainReadLocker lock;
 	
-	// TODO find search namespaces. for this walk up the parents of the completion context
-	//      to find the current namespace. since this is walking upwards upwards the namespace
-	//      identifiers have to be collected into a qualified identifier. once the identifier
-	//      is found find the namespace using the root namespace and add it (including parents)
-	//      to the search namespaces.
-	//      
-	//      then find the top context of the completion context. in there find all namespace
-	//      alias declarations up to the completion location. for each alias get the fully
-	//      qualified identifier assigned to it and use it to find the namespace. as above
-	//      add the namespace and all its parents to the search context list
-	
-	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations(
-		pCodeCompletionContext.position(), *pCompletionContext, {},
-		pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace().data() ) );
-	
-// 	foreach(auto d, pAllDefinitions){
-// 		qDebug() << "CHECK" << d.first->context()->scopeIdentifier(true) << d.first->toString() << d.second;
-// 	}
+	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations( completionPosition,
+		*pCompletionContext, {}, pCodeCompletionContext.typeFinder(),
+		*pCodeCompletionContext.rootNamespace().data() ) );
 	
 	addFunctionCalls();
 	addAllMembers( mode );

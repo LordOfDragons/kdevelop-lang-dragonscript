@@ -91,6 +91,9 @@ public:
 	Namespace &getOrAddNamespace( const IndexedIdentifier &iid );
 	Namespace &getOrAddNamespace( const QString &name );
 	
+	/** Namespace matching qualified identifier adding it and parents if absent. */
+	Namespace *getOrAddNamespace( const QualifiedIdentifier &qid );
+	
 	/** Class declaration matching identifier or nullptr. */
 	ClassDeclaration *getClass( const IndexedIdentifier &iid );
 	

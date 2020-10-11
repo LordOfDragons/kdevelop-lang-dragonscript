@@ -4,6 +4,7 @@
 #include <language/duchain/declaration.h>
 #include <language/duchain/ducontext.h>
 #include <language/duchain/use.h>
+#include <language/duchain/namespacealiasdeclaration.h>
 #include <interfaces/icore.h>
 #include <interfaces/isession.h>
 #include <interfaces/ilanguagecontroller.h>
@@ -89,7 +90,8 @@ bool &abort, bool fullCompletion ){
 	tokenizeText( m_text );
 // 	debugLogTokenStream();
 	
-	findSearchContexts();
+	prepareTypeFinder();
+	prepareNamespaces( context );
 	
 	// depending on the context different completions are reasonable
 	switch( context->type() ){
@@ -240,7 +242,7 @@ void DSCodeCompletionContext::debugLogTokenStream( const QString &prefix ) const
 	}
 }
 
-void DSCodeCompletionContext::findSearchContexts(){
+void DSCodeCompletionContext::prepareTypeFinder(){
 	DUChainReadLocker lock;
 	QSet<IndexedString> files;
 	
@@ -253,7 +255,10 @@ void DSCodeCompletionContext::findSearchContexts(){
 	
 	const DUChain &duchain = *DUChain::self();
 	
-	pTypeFinder.searchContexts() << duchain.chainForDocument( pIndexDocument );
+	// NOTE do not use duchain.chainForDocument(pIndexDocument). it is not going to work
+	//      because the current document is altered for code completion and thus the
+	//      chain returned for pIndexDocument is outdated and not working
+	pTypeFinder.searchContexts() << m_duContext->topContext();
 	
 	foreach( const IndexedString &file, files ){
 		if( file == pIndexDocument ){
@@ -275,8 +280,6 @@ void DSCodeCompletionContext::findSearchContexts(){
 		preparePackage( *ImportPackageLanguage::self() );
 		preparePackage( *ImportPackageDragengine::self() );
 	}
-	
-	pRootNamespace = Namespace::Ref( new Namespace( pTypeFinder ) );
 }
 
 void DSCodeCompletionContext::preparePackage( ImportPackage &package ){
@@ -292,6 +295,46 @@ void DSCodeCompletionContext::preparePackage( ImportPackage &package ){
 	const QSet<ImportPackage::Ref> &dependsOn = package.dependsOn();
 	foreach( const ImportPackage::Ref &dependency, dependsOn ){
 		preparePackage( *dependency );
+	}
+}
+
+void DSCodeCompletionContext::prepareNamespaces( const DUContextPointer &context ){
+	DUChainReadLocker lock;
+	
+	pRootNamespace = Namespace::Ref( new Namespace( pTypeFinder ) );
+	
+	// find current namespace and add it to search context
+	DUContext *walkContext = context.data();
+	while( walkContext ){
+		if( walkContext->owner() && walkContext->owner()->kind() == Declaration::Namespace ){
+			Namespace *addNS = pRootNamespace->getNamespace( walkContext->owner()->qualifiedIdentifier() );
+			while( addNS && addNS->parent() && ! pSearchNamespaces.contains( addNS ) ){
+				pSearchNamespaces << addNS;
+				addNS = addNS->parent();
+			}
+			break;
+		}
+		walkContext = walkContext->parentContext();
+	}
+	
+	// find pinned namespaces. for this find all NamespaceAlias declarations in the top
+	// context located before the current position
+	const QVector<Declaration*> declarations( context->topContext()->localDeclarations() );
+	foreach( const Declaration *decl, declarations ){
+		if( decl->kind() != Declaration::NamespaceAlias || decl->range().end > pPosition ){
+			continue;
+		}
+		
+		const NamespaceAliasDeclaration * const nsaDecl = static_cast<const NamespaceAliasDeclaration*>( decl );
+		if( ! nsaDecl ){
+			continue;
+		}
+		
+		Namespace *addNS = pRootNamespace->getNamespace( nsaDecl->importIdentifier() );
+		while( addNS && addNS->parent() && ! pSearchNamespaces.contains( addNS ) ){
+			pSearchNamespaces << addNS;
+			addNS = addNS->parent();
+		}
 	}
 }
 

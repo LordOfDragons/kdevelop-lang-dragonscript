@@ -109,8 +109,9 @@ public:
 	
 	
 protected:
-	void findSearchContexts();
+	void prepareTypeFinder();
 	void preparePackage( ImportPackage &package );
+	void prepareNamespaces( const DUContextPointer &context );
 	
 	
 	

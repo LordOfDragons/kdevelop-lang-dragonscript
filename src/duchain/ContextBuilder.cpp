@@ -44,14 +44,14 @@ void ContextBuilder::updateSearchNamespaces(){
 	pSearchNamespaces.clear();
 	
 	Namespace *addNS = pCurNamespace;
-	while( addNS && ! pSearchNamespaces.contains( addNS ) ){
+	while( addNS && addNS->parent() && ! pSearchNamespaces.contains( addNS ) ){
 		pSearchNamespaces << addNS;
 		addNS = addNS->parent();
 	}
 	
 	foreach( Namespace *pinned, pPinnedNamespaces ){
 		addNS = pinned;
-		while( addNS && ! pSearchNamespaces.contains( addNS ) ){
+		while( addNS && addNS->parent() && ! pSearchNamespaces.contains( addNS ) ){
 			pSearchNamespaces << addNS;
 			addNS = addNS->parent();
 		}
@@ -65,7 +65,7 @@ void ContextBuilder::addPinnedUpdateNamespaces( Namespace *ns ){
 	
 	pPinnedNamespaces << ns;
 	
-	while( ns && ! pSearchNamespaces.contains( ns ) ){
+	while( ns && ns->parent() && ! pSearchNamespaces.contains( ns ) ){
 		pSearchNamespaces << ns;
 		ns = ns->parent();
 	}

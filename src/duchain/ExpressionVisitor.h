@@ -48,16 +48,12 @@ private:
 	/** \brief Void type is allowed. */
 	bool pAllowVoid = false;
 	
-	/** \brief used by code completion to disable range checks on declaration searches. */
-	bool m_forceGlobalSearching = false;
-	
 	/** \brief used by code completion to detect unknown NameAst elements in expressions. */
 	bool m_reportUnknownNames = false;
 	
-	CursorInRevision m_scanUntilCursor = CursorInRevision::invalid();
-	
 	QSet<QString> m_unknownNames;
 	
+	DUContext *pLastContext;
 	bool pIsTypeName;
 	
 	const QVector<Namespace*> &pSearchNamespaces;
@@ -99,16 +95,8 @@ public:
 	/** \brief Set if void type is allowed. */
 	void setAllowVoid( bool allowVoid );
 	
-	void enableGlobalSearching(){
-		m_forceGlobalSearching = true;
-	}
-
 	void enableUnknownNameReporting(){
 		m_reportUnknownNames = true;
-	}
-
-	void scanUntil( const CursorInRevision &end ){
-		m_scanUntilCursor = end;
 	}
 
 	QSet<QString> unknownNames() const{
@@ -119,8 +107,8 @@ public:
 	bool isLastAlias() const;
 	
 	/** \brief Context matching last type found or nullptr. */
-	const DUContext *lastContext() const;
-	
+	inline const DUContext *lastContext() const{ return pLastContext; }
+
 	/** \brief Visited expression represents a type name not an object instance. */
 	inline bool isTypeName() const{ return pIsTypeName; }
 	
@@ -131,13 +119,18 @@ protected:
 	void reportSemanticHint( const RangeInRevision &range, const QString &hint );
 	
 	/** \brief Simplify common calls. */
+	void encounterInvalid();
+	void encounterVoid();
 	void encounterDecl( Declaration &decl );
 	void encounterInternalType( ClassDeclaration *classDecl );
+	void encounterFunction( ClassFunctionDeclaration *funcDecl );
 	
 	/** \brief Check function call. */
-	void checkFunctionCall( AstNode &node, const DUContext &context, const AbstractType::Ptr &argument );
+	void checkFunctionCall( AstNode &node, const DUContext &context,
+		const AbstractType::Ptr &argument, bool staticOnly = false );
 	
-	void checkFunctionCall( AstNode &node, const DUContext &ctx, const QVector<AbstractType::Ptr> &signature );
+	void checkFunctionCall( AstNode &node, const DUContext &ctx,
+		const QVector<AbstractType::Ptr> &signature, bool staticOnly = false );
 	
 	/**
 	 * \brief Clear last type and declaration the visit node.
@@ -155,4 +148,4 @@ private:
 
 }
 
-#endif // EXPRESSIONVISITOR_H
+#endif

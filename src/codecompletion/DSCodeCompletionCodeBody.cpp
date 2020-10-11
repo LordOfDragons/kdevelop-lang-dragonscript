@@ -41,119 +41,124 @@ pFullCompletion( fullCompletion )
 
 
 void DSCodeCompletionCodeBody::completionItems(){
-	TokenStream &tokenStream = pCodeCompletionContext.tokenStream();
-	if( tokenStream.size() == 0 ){
-		return;
-	}
-	
-	const QByteArray ptext( pCodeCompletionContext.text().toUtf8() );
-	ParseSession session( IndexedString( pCodeCompletionContext.document() ), ptext );
-	Parser parser;
-	
-	session.prepareCompletion( parser );
-	
-	// find the first token from the end of the token stream where parsing should begin.
-	// we want to find the start of the sub expression
-	int lastIndex;
-	
-	switch( tokenStream.back().kind ){
-	case Parser::Token_PERIOD:
-		lastIndex = -2;
-		break;
-		
-	case Parser::Token_IDENTIFIER:
-		lastIndex = -1;
-		break;
-		
-	default:
-		lastIndex = -1;
-	}
-	
-	const int startIndex = findFirstParseToken( tokenStream, lastIndex );
-	
-		/*
-		{for(int i=startIndex; i<tokenStream.size()-1; i++ ){
-			const Token &token = tokenStream.at( i );
-			qDebug() << "DSCodeCompletionCodeBody.findStart: kind=" << TokenText( token.kind )
-				<< QString::fromLatin1( pCompletionContext.tokenStreamText().mid( token.begin, token.end - token.begin + 1 ) );
-		}}
-		*/
-	
 	const Declaration *completionDecl = nullptr;
 	CursorInRevision completionPosition;
 	AbstractType::Ptr completionType;
 	Mode mode = Mode::everything;
+	bool firstWord = true;
 	
 	pCompletionContext = nullptr;
 	pAllDefinitions.clear();
 	
-	if( startIndex < tokenStream.size() ){
-		// copy tokens except the final period
-		copyTokens( tokenStream, *session.tokenStream(), startIndex, lastIndex );
+	TokenStream &tokenStream = pCodeCompletionContext.tokenStream();
+	if( tokenStream.size() > 0 ){
+		const QByteArray ptext( pCodeCompletionContext.text().toUtf8() );
+		ParseSession session( IndexedString( pCodeCompletionContext.document() ), ptext );
+		Parser parser;
 		
-		// try parsing the token stream into an expression. since we figured out the tokens
-		// forming the sub expression parsing succeeds.
-		ExpressionAst *ast = nullptr;
-		parser.rewind( 0 ); // required otherwise parser fails
-		if( ! parser.parseExpression( &ast ) || ! ast
-		|| session.tokenStream()->index() != session.tokenStream()->size() ){
-			qDebug() << "DSCodeCompletionCodeBody: parsing sub expression failed";
-			return;
-		}
-		/*
-		int i;
-		for( i=0; i<session.tokenStream()->size(); i++ ){
-			parser.rewind( i );
-			if( parser.parseExpression( &ast ) && session.tokenStream()->index() == session.tokenStream()->size() ){
-				break;
-			}
-			ast = nullptr;
-		}
-		*/
+		session.prepareCompletion( parser );
 		
-		// get the declaration to show completions for
-// 		DebugVisitor( session.tokenStream(), QString::fromLatin1( ptext ) ).visitNode( ast );
+		// find the first token from the end of the token stream where parsing should begin.
+		// we want to find the start of the sub expression
+		int lastIndex;
 		
-		EditorIntegrator editor( session );
-		DUChainReadLocker lock;
-		ExpressionVisitor exprvisitor( editor, &pContext, pCodeCompletionContext.searchNamespaces(),
-			pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace(),
-			pCodeCompletionContext.position() );
-		exprvisitor.visitExpression( ast );
-		if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
-			qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
-			return;
-		}
-		
-		/*
-		if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-			qDebug() << "DSCodeCompletionCodeBody: completion type " << exprvisitor.lastType()->toString()
-				<< "declaration " << ( exprvisitor.lastDeclaration().data() ? exprvisitor.lastDeclaration().data()->toString() : "-" );
-		}
-		*/
-		
-		completionType = exprvisitor.lastType();
-		completionDecl = exprvisitor.lastDeclaration().data();
-		pCompletionContext = exprvisitor.lastContext();
-		completionPosition = CursorInRevision::invalid();
-		
-		if( exprvisitor.isTypeName() ){
-			mode = Mode::type;
+		switch( tokenStream.back().kind ){
+		case Parser::Token_PERIOD:
+			lastIndex = -2;
+			break;
 			
-		}else{
-			mode = Mode::instance;
+		case Parser::Token_IDENTIFIER:
+			lastIndex = -1;
+			break;
+			
+		default:
+			lastIndex = -1;
 		}
 		
-	}else{
+		const int startIndex = findFirstParseToken( tokenStream, lastIndex );
+		
+			/*
+			{for(int i=startIndex; i<tokenStream.size()-1; i++ ){
+				const Token &token = tokenStream.at( i );
+				qDebug() << "DSCodeCompletionCodeBody.findStart: kind=" << TokenText( token.kind )
+					<< QString::fromLatin1( pCompletionContext.tokenStreamText().mid( token.begin, token.end - token.begin + 1 ) );
+			}}
+			*/
+		
+		if( startIndex < tokenStream.size() ){
+			// copy tokens except the final period
+			copyTokens( tokenStream, *session.tokenStream(), startIndex, lastIndex );
+			
+			// try parsing the token stream into an expression. since we figured out the tokens
+			// forming the sub expression parsing succeeds.
+			ExpressionAst *ast = nullptr;
+			parser.rewind( 0 ); // required otherwise parser fails
+			if( ! parser.parseExpression( &ast ) || ! ast
+			|| session.tokenStream()->index() != session.tokenStream()->size() ){
+				qDebug() << "DSCodeCompletionCodeBody: parsing sub expression failed";
+				return;
+			}
+			/*
+			int i;
+			for( i=0; i<session.tokenStream()->size(); i++ ){
+				parser.rewind( i );
+				if( parser.parseExpression( &ast ) && session.tokenStream()->index() == session.tokenStream()->size() ){
+					break;
+				}
+				ast = nullptr;
+			}
+			*/
+			
+			// get the declaration to show completions for
+	// 		DebugVisitor( session.tokenStream(), QString::fromLatin1( ptext ) ).visitNode( ast );
+			
+			EditorIntegrator editor( session );
+			DUChainReadLocker lock;
+			ExpressionVisitor exprvisitor( editor, &pContext, pCodeCompletionContext.searchNamespaces(),
+				pCodeCompletionContext.typeFinder(), *pCodeCompletionContext.rootNamespace(),
+				pCodeCompletionContext.position() );
+			exprvisitor.visitExpression( ast );
+			if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
+				qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
+				return;
+			}
+			
+			/*
+			if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
+				qDebug() << "DSCodeCompletionCodeBody: completion type " << exprvisitor.lastType()->toString()
+					<< "declaration " << ( exprvisitor.lastDeclaration().data() ? exprvisitor.lastDeclaration().data()->toString() : "-" );
+			}
+			*/
+			
+			completionType = exprvisitor.lastType();
+			completionDecl = exprvisitor.lastDeclaration().data();
+			pCompletionContext = exprvisitor.lastContext();
+			completionPosition = CursorInRevision::invalid();
+			
+			if( exprvisitor.isTypeName() ){
+				mode = Mode::type;
+				
+			}else{
+				mode = Mode::instance;
+			}
+			firstWord = false;
+		}
+	}
+	
+	if( firstWord ){
 		// completion at the first word. assume context type and declaration
 		DUChainReadLocker lock;
 		pCompletionContext = &pContext;
-		completionDecl = pContext.owner();
+		completionDecl = Helpers::thisClassDeclFor( pContext );
 		if( completionDecl ){
 			completionType = completionDecl->abstractType();
 		}
 		completionPosition = pCodeCompletionContext.position();
 	}
+	
+	qDebug() << "type" << (completionType ? completionType->toString() : "-")
+		<< "decl" << (completionDecl ? completionDecl->toString() : "-")
+		<< "ctx" << (pCompletionContext ? pCompletionContext->scopeIdentifier(true).toString() : "-");
 	
 	if( ! completionDecl || ! completionType || ! pCompletionContext ){
 		qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
@@ -271,6 +276,7 @@ int DSCodeCompletionCodeBody::findFirstParseToken( const TokenStream& tokenStrea
 		case TokenType::Token_LITERAL_FLOAT:
 		case TokenType::Token_LITERAL_INTEGER:
 		case TokenType::Token_LITERAL_STRING:
+// 		case TokenType::Token_COMMA: // only happens inside parenthesis
 			if( countGroups > 0 || countBlocks > 0 ){
 				break;
 			}
@@ -324,6 +330,10 @@ void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
 			
 		default:
 			break;
+		}
+		
+		if( each.first->kind() == Declaration::NamespaceAlias ){
+			ignore = true;
 		}
 		
 		if( ignore ){

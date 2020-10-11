@@ -187,7 +187,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 			return;
 		}
 		
-		// base object is a type so find an inner type
+		// base object is a type so find an inner type or a constant member
 		const IndexedIdentifier identifier( Identifier( pEditor.tokenText( *node->name ) ) );
 		Declaration * const decl = Helpers::declarationForName( identifier,
 			pCursorOffset + pEditor.findPosition( *node->name ), *ctx,
@@ -195,7 +195,7 @@ void ExpressionVisitor::visitExpressionMember( ExpressionMemberAst *node ){
 		
 		if( decl ){
 			encounterDecl( *decl );
-			pIsTypeName = true;
+			pIsTypeName = decl->kind() == Declaration::Kind::Type;
 			
 		}else{
 			encounterInvalid();

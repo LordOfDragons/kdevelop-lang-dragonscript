@@ -59,7 +59,7 @@ pIsType( declaration->kind() == Declaration::Kind::Type )
 			pIsOperator = operatorNames.contains( declaration->identifier().toString() );
 		}
 		
-	}else if( membDecl ){
+	}else if( declaration->abstractType() ){
 		pPrefix = declaration->abstractType()->toString();
 	}
 	

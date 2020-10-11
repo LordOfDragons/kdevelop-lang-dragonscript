@@ -60,6 +60,19 @@ void ImportPackage::contexts( State &state ){
 				qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase" << phase << ":" << file;
 			}
 			
+			
+			
+			
+			// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+			/*
+					replace phase 3 check with phase 2 check. for completion in project files
+					phase 2 contexts are enough. phase 3 can be done in the background until
+					completed. this allows to work faster
+			*/
+			// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+			
+			
+			
 			if( phase < 3 ){
 // 				qDebug() << "ImportPackage.getContexts" << pName << ": File has context with phase" << phase << ":" << file;
 				if( bp.isQueued( file ) ){

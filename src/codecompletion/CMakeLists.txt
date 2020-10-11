@@ -7,9 +7,13 @@ set(codecompletion_STAT_SRCS
 	DSCodeCompletionContext.h
 	DSCodeCompletionCodeBody.cpp
 	DSCodeCompletionCodeBody.h
+	DSCodeCompletionCodeClass.cpp
+	DSCodeCompletionCodeClass.h
 	items/DSCodeCompletionItem.cpp
-	items/DSCodeCompletionItem.cpp
-	items/DSCCItemFunctionCall.h
+	items/DSCodeCompletionItem.h
+	items/DSCodeCompletionOverrideFunction.cpp
+	items/DSCodeCompletionOverrideFunction.h
+	items/DSCCItemFunctionCall.cpp
 	items/DSCCItemFunctionCall.h
 )
 

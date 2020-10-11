@@ -14,6 +14,7 @@
 #include "dsp_tokenstream.h"
 #include "dsp_debugvisitor.h"
 
+#include "DSCodeCompletionCodeClass.h"
 #include "DSCodeCompletionCodeBody.h"
 #include "DSCodeCompletionContext.h"
 #include "DSCodeCompletionModel.h"
@@ -108,6 +109,7 @@ bool &abort, bool fullCompletion ){
 	case DUContext::ContextType::Class:
 		// inside "class" or "interface" definition
 		qDebug() << "DSCodeCompletionContext context type Class";
+		DSCodeCompletionCodeClass( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	case DUContext::ContextType::Function:

@@ -33,6 +33,7 @@ namespace Dragengine.Elements.  Front.Back  /* ccc */.  Both   .Last
 pin Dragengine.Elements  /* allowed */  // allowed
 pin Dragengine.Gui.Events //
 pin Dragengine.Scenery
+pin Dragengine.Gui.CanvasCreators
 
 requires "Math"  /* allowed */  // allowed
 
@@ -109,6 +110,7 @@ public class OuterClass extends ClassExtendImplement
 		pMember2 = null
 		var ClassExtendImplement2 v = ClassExtendImplement2.new()
 		var Container c
+		var CanvasCreators cc = CanvasCreators.new()
 		var Debugging.DebugPerformanceCounter dbg
 		dbg.start()
 		

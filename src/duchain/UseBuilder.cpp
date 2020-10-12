@@ -1107,6 +1107,7 @@ const QVector<IProblem::Ptr> &diagnostics ){
 	
 	DUChainWriteLocker lock;
 	topContext()->addProblem( ProblemPointer( problem ) );
+// 	qDebug() << "reportSemanticError" << problem->toString();
 }
 
 void UseBuilder::reportSemanticHint( const RangeInRevision &range, const QString &hint ){
@@ -1122,6 +1123,7 @@ void UseBuilder::reportSemanticHint( const RangeInRevision &range, const QString
 	
 	DUChainWriteLocker lock;
 	topContext()->addProblem( ProblemPointer( problem ) );
+// 	qDebug() << "reportSemanticHint" << problem->toString();
 }
 
 }

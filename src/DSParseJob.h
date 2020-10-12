@@ -86,7 +86,6 @@ private:
 	ImportPackage::Ref pPackage;
 	QSet<ImportPackage::Ref> pDependencies;
 	QSet<IndexedString> pProjectFiles;
-	QStringList pProjectIncludePath;
 	int pReparsePriority;
 	QSet<IndexedString> pWaitForFiles;
 	int pPhase;

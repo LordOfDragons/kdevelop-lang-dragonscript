@@ -55,10 +55,14 @@ pStartAst( nullptr )
 	// accprdomg to milian project object is only allowed to be accessed in the constructor
 	IProject * const project = ICore::self()->projectController()->findProjectForUrl( url.toUrl() );
 	if( project ){
-		pProjectFiles = project->fileSet();
+		pProjectSettings.load( *project );
 		
-		const KConfigGroup config( project->projectConfiguration()->group( "dragonscriptsupport" ) );
-		pProjectIncludePath = config.readEntry( "pathInclude", QStringList() );
+		const QSet<IndexedString> files( project->fileSet() );
+		foreach( const IndexedString &file, files ){
+			if( file.str().endsWith( ".ds" ) ){
+				pProjectFiles << file;
+			}
+		}
 	}
 }
 
@@ -167,7 +171,23 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 			}
 			
 			pReparsePriority += 10;
-			reparseLater( pPhase + 1 );
+			
+			// reschedule only if this is a project file. building uses for package files
+			// is not needed since it is not used but expensive to do
+			// 
+			// it looks like tracker is present only if the file is open in the editor.
+			// calling trackerForUrl() is stated to be thread safe but not accessing
+			// the returned object
+			// 
+			// if the file is open in the editor keep updating otherwise not
+			const bool openInEditor = ICore::self()->languageController()->
+				backgroundParser()->trackerForUrl( document() );
+			
+			if( ! pPackage || openInEditor ){
+				if( openInEditor ){
+					reparseLater( pPhase + 1 );
+				}
+			}
 		}
 		
 	}else{
@@ -183,6 +203,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	DUChainWriteLocker lock;
 	foreach( const ProblemPointer &p, session.problems() ){
 		duChain()->addProblem( p );
+// 		qDebug() << "sessionProblem" << p->toString();
 	}
 	}
 	
@@ -304,23 +325,14 @@ void DSParseJob::findDependencies(){
 		return;
 	}
 	
-	// otherwise this is a project document
-	
-	// add language import package
+	// otherwise this is a project document so add dependencies
 	pDependencies << ImportPackageLanguage::self();
 	
-	// add dragengine import package
-	pDependencies << ImportPackageDragengine::self();
-	
-	// add import package for each project import set by the user
-	/*
-	const KSharedConfigPtr config( project->projectConfiguration() );
-	foreach( const QString &each, config->additionalConfigSources() ){
-		qDebug() << "KDevDScript ContextBuilder: additional config sources" << each;
+	if( pProjectSettings.requireDragenginePackage() ){
+		pDependencies << ImportPackageDragengine::self();
 	}
-	*/
 	
-	foreach( const QString &dir, pProjectIncludePath ){
+	foreach( const QString &dir, pProjectSettings.pathInclude() ){
 		const QString name( QString( "#dir#" ) + dir );
 		ImportPackage::Ref package( importPackages.packageNamed( name ) );
 		if( ! package ){

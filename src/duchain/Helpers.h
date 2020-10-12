@@ -159,6 +159,23 @@ public:
 	static bool overrides( const ClassFunctionDeclaration *func1,
 		const ClassFunctionDeclaration *func2, TypeFinder &typeFinder );
 	
+	/**
+	 * Find shortest qualified identifier relative to search namespaces or empty if failed.
+	 */
+	static QualifiedIdentifier shortestQualifiedIdentifier( const AbstractType::Ptr &type,
+		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace );
+	
+	/**
+	 * Format qualified idenfitier.
+	 */
+	static QString formatIdentifier( const QualifiedIdentifier &identifier );
+	
+	/**
+	 * Format shortest qualified identifier relative to search namespaces.
+	 */
+	static QString formatShortestIdentifier( const AbstractType::Ptr &type,
+		const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace );
+	
 	/** Get documentation file for Object class. */
 	static IndexedString getDocumentationFileObject();
 	

@@ -16,131 +16,9 @@ using namespace KDevelop;
 
 namespace DragonScript {
 
-static const QVector<QString> operatorNames = {
-	"++", "--", "+", "-", "!", "~", "*", "/", "%", "<<", ">>", "&", "|", "^", "<", ">",
-	"<=", ">=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=","|=","^="
-};
-
-DSCodeCompletionItem::DSCodeCompletionItem( DeclarationPointer declaration, int depth ) :
-NormalDeclarationCompletionItem( declaration, QExplicitlySharedDataPointer<CodeCompletionContext>(), depth ),
-pIsConstructor( false ),
-pIsOperator( false ),
-pIsStatic( false ),
-pIsType( declaration->kind() == Declaration::Kind::Type || declaration->kind() == Declaration::Namespace ),
-pAccessType( AccessType::Local ),
-pProperties( CodeCompletionModel::NoProperty )
-{
-	const DUChainPointer<ClassMemberDeclaration> membDecl = declaration.dynamicCast<ClassMemberDeclaration>();
-	const FunctionType::Ptr funcType = declaration->type<FunctionType>();
-	const bool parentIsNamespace = declaration->context() && declaration->context()->owner()
-		&& declaration->context()->owner()->kind() == Declaration::Namespace;
-	
-	if( funcType ){
-		AbstractType::Ptr returnType = funcType->returnType();
-		if( returnType ){
-			pPrefix = returnType->toString();
-			
-		}else{
-			pPrefix = "void";
-		}
-		
-		// constructor functions are:
-		// - functions with name "new"
-		// - static functions with return type matching owner class
-		if( declaration->identifier().toString() == "new" ){
-			pIsConstructor = true;
-			
-		}else if( returnType && membDecl && membDecl->isStatic() ){
-			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *declaration->context() );
-			if( classDecl && returnType->equals( classDecl->abstractType().data() ) ){
-				pIsConstructor = true;
-			}
-		}
-		
-		if( ! pIsConstructor ){
-			pIsOperator = operatorNames.contains( declaration->identifier().toString() );
-		}
-		
-		pProperties = CodeCompletionModel::Function | CodeCompletionModel::Virtual;
-		
-		// CodeCompletionModel::Override can be used to signal an overriden function
-		// TODO figure out when to add this flag somehow
-		
-	}else{
-		if( declaration->abstractType() ){
-			pPrefix = declaration->abstractType()->toString();
-		}
-		
-		if( declaration->kind() == Declaration::Namespace ){
-			pAccessType = AccessType::Global;
-			pProperties = CodeCompletionModel::Public | CodeCompletionModel::Namespace
-				| CodeCompletionModel::NamespaceScope;
-			
-		}else if( declaration->kind() == Declaration::Type ){
-			if( declaration->internalContext() ){
-				const DUContext &context = *declaration->internalContext();
-				if( context.type() == DUContext::Class ){
-					pProperties = CodeCompletionModel::Class;
-					
-					DUChainPointer<ClassDeclaration> classDecl( declaration.dynamicCast<ClassDeclaration>() );
-					if( classDecl ){
-						if( classDecl->classType() == ClassDeclarationData::Interface ){
-							pProperties |= CodeCompletionModel::Virtual;
-						}
-					}
-					
-				}else if( context.type() == DUContext::Enum ){
-					pProperties = CodeCompletionModel::Enum;
-				}
-			}
-			
-		}else{
-			pProperties |= CodeCompletionModel::Variable;
-		}
-	}
-	
-	if( membDecl ){
-		if( declaration->kind() == Declaration::Namespace || parentIsNamespace ){
-			pAccessType = AccessType::Global;
-			
-		}else{
-			pIsStatic = pIsConstructor || membDecl->isStatic();
-			if( pIsStatic ){
-				pProperties |= CodeCompletionModel::Static;
-			}
-			
-			bool isParentNamespace = false;
-			if( declaration->internalContext() && declaration->internalContext()->owner() ){
-				isParentNamespace = declaration->internalContext()->owner()->kind() == Declaration::Namespace;
-			}
-			
-			if( isParentNamespace ){
-				pAccessType = AccessType::Global;
-				pProperties = CodeCompletionModel::Public;
-				
-			}else if( membDecl->accessPolicy() == Declaration::Public ){
-				pAccessType = AccessType::Public;
-				pProperties |= CodeCompletionModel::Public;
-				
-			}else if( membDecl->accessPolicy() == Declaration::Protected ){
-				pAccessType = AccessType::Protected;
-				pProperties |= CodeCompletionModel::Protected;
-				
-			}else if( membDecl->accessPolicy() == Declaration::Private ){
-				pAccessType = AccessType::Private;
-				pProperties |= CodeCompletionModel::Private;
-				
-			}else{
-				pAccessType = AccessType::Public;
-				pProperties |= CodeCompletionModel::Public;
-			}
-		}
-		
-	}else if( declaration->context() ){
-		pAccessType = AccessType::Local;
-		pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
-		pProperties |= CodeCompletionModel::Public | CodeCompletionModel::LocalScope;
-	}
+DSCodeCompletionItem::DSCodeCompletionItem( DSCodeCompletionContext &cccontext,
+	DeclarationPointer declaration, int depth ) :
+DSCodeCompletionBaseItem( cccontext, declaration, depth ){
 }
 
 void DSCodeCompletionItem::executed( KTextEditor::View *view, const KTextEditor::Range &word ){
@@ -148,18 +26,11 @@ void DSCodeCompletionItem::executed( KTextEditor::View *view, const KTextEditor:
 		return;
 	}
 	
-	NormalDeclarationCompletionItem::executed( view, word );
+	DSCodeCompletionBaseItem::executed( view, word );
 }
 
 QVariant DSCodeCompletionItem::data( const QModelIndex &index, int role, const CodeCompletionModel *model ) const{
 	switch( role ){
-	case Qt::DisplayRole:
-		switch( index.column() ){
-		case CodeCompletionModel::Prefix:
-			return pPrefix;
-		}
-		break;
-		
 	case CodeCompletionModel::BestMatchesCount:
 		return 0; //5;
 		
@@ -176,7 +47,7 @@ QVariant DSCodeCompletionItem::data( const QModelIndex &index, int role, const C
 		}
 	}
 	
-	return NormalDeclarationCompletionItem::data( index, role, model );
+	return DSCodeCompletionBaseItem::data( index, role, model );
 }
 
 
@@ -242,7 +113,9 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 				hasCursorTag = true;
 				
 			}else{
-				text += QString( "${arg%1=\"%2\"}" ).arg( i ).arg( args[ i ].first->toString() );
+				text += QString( "${arg%1=\"%2 %3\"}" ).arg( i )
+					.arg( tightTypeName(  args[ i ].first->abstractType() ) )
+					.arg( args[ i ].first->identifier().toString() );
 				hasFields = true;
 			}
 		}
@@ -262,27 +135,6 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 	}
 	
 	return true;
-}
-
-QString DSCodeCompletionItem::lineIndent( KTextEditor::View &view, int line ) const{
-	KTextEditor::Document &document = *view.document();
-	const QString lineText( document.line( line ) );
-	const int len = lineText.length();
-	int i;
-	
-	for( i=0; i<len; i++ ){
-		if( ! lineText[ i ].isSpace() ){
-			break;
-		}
-	}
-	
-	return lineText.left( i );
-}
-
-CodeCompletionModel::CompletionProperties DSCodeCompletionItem::completionProperties() const{
-	// the properties calculate by NormalDeclarationCompletionItem are off for some reason
-	// so we have to calculate them here on our own
-	return pProperties;
 }
 
 }

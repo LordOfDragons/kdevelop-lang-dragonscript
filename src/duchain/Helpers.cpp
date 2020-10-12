@@ -253,6 +253,96 @@ const ClassFunctionDeclaration *func2, TypeFinder &typeFinder ){
 			func2->context()->owner()->abstractType(), typeFinder );
 }
 
+QualifiedIdentifier Helpers::shortestQualifiedIdentifier( const AbstractType::Ptr &type,
+const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace ){
+	const ClassDeclaration * const classDecl = typeFinder.declarationFor( type );
+	if( ! classDecl ){
+		return QualifiedIdentifier();
+	}
+	
+	const QualifiedIdentifier identifier( classDecl->qualifiedIdentifier() );
+	const int count = identifier.count();
+	if( count == 0 ){
+		return QualifiedIdentifier();
+	}
+	
+	// find first the namespace in the qualified identifier. this way we know which
+	// identifier part is the top most class identifier.
+	Namespace *ns = &rootNamespace;
+	int i;
+	
+	for( i=0; i<count-1; i++ ){
+		Namespace * const findNS = ns->getNamespace( IndexedIdentifier( identifier.at( i ) ) );
+		if( ! findNS ){
+			break;
+		}
+		ns = findNS;
+	}
+	
+	// try to find the class identifier in the contexts up to the first namespace context.
+	// this covers the class being an inner class of one of the contexts underneath namespace
+	DUContext *context = classDecl->internalContext();
+	while( context ){
+		if( context->owner() && context->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
+		const QList<Declaration*> decls( context->findLocalDeclarations(
+			identifier.at( i ), CursorInRevision::invalid() ) );
+		if( ! decls.isEmpty() ){
+			return QualifiedIdentifier( identifier.at( i ) );
+		}
+		context = context->parentContext();
+	}
+	
+	// if this yields no result walk up the namespace identifier in the qualified identifier.
+	// try to find each namespace part in the search namespaces. the first one scoring a
+	// match is used as the namespace to resolve against
+	for( ; i>=0; i-- ){
+		foreach( Namespace *each, namespaces ){
+			if( each != ns ){
+				continue;
+			}
+			
+			QualifiedIdentifier result;
+			for( ; i<count; i++ ){
+				result += identifier.at( i );
+			}
+			return result;
+		}
+		
+		ns = ns->parent();
+	}
+	
+	return identifier;
+}
+
+QString Helpers::formatShortestIdentifier( const AbstractType::Ptr &type,
+const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNamespace ){
+	const QualifiedIdentifier identifier( shortestQualifiedIdentifier(
+		type, namespaces, typeFinder, rootNamespace ) );
+	if( identifier.isEmpty() ){
+		return type->toString();
+		
+	}else{
+		return formatIdentifier( identifier );
+	}
+}
+
+QString Helpers::formatIdentifier( const QualifiedIdentifier &identifier ){
+	const int count = identifier.count();
+	QString name;
+	int i;
+	
+	for( i=0; i<count; i++ ){
+		if( i > 0 ){
+			name += ".";
+		}
+		name += identifier.at( i ).toString();
+	}
+	
+	return name;
+}
+
 
 
 IndexedString Helpers::getDocumentationFileObject(){
@@ -298,7 +388,10 @@ Namespace &rootNamespace, bool withGlobal ){
 		}
 	}
 	
-	while( searchContext && searchContext->owner() && searchContext->owner()->kind() != Declaration::Namespace ){
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
 		const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
 		if( ! declarations.isEmpty() ){
 			return declarations.last();
@@ -376,7 +469,10 @@ const DUContext &context, TypeFinder &typeFinder ){
 		}
 		
 		DUContext *searchContext = baseContext;
-		while( searchContext && searchContext->owner() && searchContext->owner()->kind() != Declaration::Namespace ){
+		while( searchContext ){
+			if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+				break;
+			}
 			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
 			if( ! declarations.isEmpty() ){
 				return declarations.last();
@@ -425,7 +521,10 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 		}
 	}
 	
-	while( searchContext && searchContext->owner() && searchContext->owner()->kind() != Declaration::Namespace ){
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
 		const QList<Declaration*> found( searchContext->findLocalDeclarations(
 			identifier, CursorInRevision::invalid(), nullptr, {}, searchFlags ) );
 		foreach( Declaration *d, found ){
@@ -511,7 +610,10 @@ const DUContext &context, TypeFinder &typeFinder, Namespace &rootNamespace, bool
 		}
 		
 		DUContext *searchContext = baseContext;
-		while( searchContext && searchContext->owner() && searchContext->owner()->kind() != Declaration::Namespace ){
+		while( searchContext ){
+			if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+				break;
+			}
 			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
 			foreach( Declaration *decl, declarations ){
 				foundDeclarations << decl;
@@ -553,7 +655,10 @@ Namespace &rootNamespace, bool withGlobal ){
 		}
 	}
 	
-	while( searchContext && searchContext->owner() && searchContext->owner()->kind() != Declaration::Namespace ){
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
 		const QVector<Declaration*> found( searchContext->localDeclarations() );
 		foreach( Declaration *d, found ){
 			declarations << QPair<Declaration*, int>{ d, 0 };
@@ -667,11 +772,8 @@ QVector<QPair<Declaration*, int>> Helpers::consolidate( const QVector<QPair<Decl
 				continue;
 			}
 			
-			if( foundFunc ){
-				const TypePtr<FunctionType> checkFunc = foundDecl.first->type<FunctionType>();
-				if( ! foundFunc->equals( checkFunc.data() ) ){
-					continue;
-				}
+			if( foundFunc && ! foundFunc->equals( iter->first->abstractType().data() ) ){
+				continue;
 			}
 			
 			if( foundDecl.second >= iter->second ){

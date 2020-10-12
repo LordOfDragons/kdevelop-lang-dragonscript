@@ -353,7 +353,8 @@ void DSCodeCompletionCodeBody::addAllMembers( Mode mode ){
 	}
 	
 	foreach( auto each, pAllDefinitions ){
-		DSCodeCompletionItem * const item = new DSCodeCompletionItem( DeclarationPointer( each.first ), each.second );
+		DSCodeCompletionItem * const item = new DSCodeCompletionItem(
+			pCodeCompletionContext, DeclarationPointer( each.first ), each.second );
 		DUContext * const declContext = each.first->context();
 		bool ignore = false;
 		
@@ -411,7 +412,8 @@ void DSCodeCompletionCodeBody::addAllTypes(){
 			continue;
 		}
 		
-		DSCodeCompletionItem * const item = new DSCodeCompletionItem( DeclarationPointer( each.first ), each.second );
+		DSCodeCompletionItem * const item = new DSCodeCompletionItem(
+			pCodeCompletionContext, DeclarationPointer( each.first ), each.second );
 		
 		if( item->isStatic() ){
 			pStaticItems << CompletionTreeItemPointer( item );

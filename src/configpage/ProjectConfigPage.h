@@ -2,10 +2,10 @@
 #define DSPROJECTCONFIGPAGE_H
 
 #include <QStringListModel>
-#include <KConfigGroup>
 #include <project/projectconfigpage.h>
 
 #include "configpageexport.h"
+#include "../DSProjectSettings.h"
 
 using namespace KDevelop;
 
@@ -17,9 +17,9 @@ class KDEVDSCONFIGPAGE_EXPORT ProjectConfigPage : public ConfigPage{
 	Q_OBJECT
 	
 private:
-	KConfigGroup pConfigGroup;
-	Ui_ProjectConfig *pUI;
 	IProject *pProject;
+	DSProjectSettings pSettings;
+	Ui_ProjectConfig *pUI;
 	QStringListModel *pModelPathInclude;
 	
 public:
@@ -36,6 +36,8 @@ public Q_SLOTS:
 	void btnPathIncludeSelect();
 	void btnPathIncludeAdd();
 	void btnPathIncludeRemove();
+	
+	void chkRequireDragenginePackageChanged();
 };
 
 }

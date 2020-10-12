@@ -9,6 +9,8 @@ set(codecompletion_STAT_SRCS
 	DSCodeCompletionCodeBody.h
 	DSCodeCompletionCodeClass.cpp
 	DSCodeCompletionCodeClass.h
+	items/DSCodeCompletionBaseItem.cpp
+	items/DSCodeCompletionBaseItem.h
 	items/DSCodeCompletionItem.cpp
 	items/DSCodeCompletionItem.h
 	items/DSCodeCompletionOverrideFunction.cpp

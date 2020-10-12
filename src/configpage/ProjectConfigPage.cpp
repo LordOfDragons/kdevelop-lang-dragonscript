@@ -1,20 +1,26 @@
 #include <QFileDialog>
 
+#include <interfaces/icore.h>
+#include <interfaces/ilanguagecontroller.h>
+#include <language/backgroundparser/backgroundparser.h>
+
 #include "ProjectConfigPage.h"
 #include "ui_projectConfigPage.h"
+#include "../DSParseJob.h"
 #include "../duchain/Helpers.h"
 
 
+using namespace KDevelop;
+
 namespace DragonScript {
 
-ProjectConfigPage::ProjectConfigPage( IPlugin* self,
-const KDevelop::ProjectConfigOptions &options, QWidget *parent ) :
+ProjectConfigPage::ProjectConfigPage( IPlugin* self, const ProjectConfigOptions &options, QWidget *parent ) :
 ConfigPage( self, nullptr, parent ),
+pProject( options.project ),
 pUI( new Ui_ProjectConfig )
 {
-	pConfigGroup = options.project->projectConfiguration()->group( "dragonscriptsupport" );
+	pSettings.load( *options.project );
 	pUI->setupUi( this );
-	pProject = options.project;
 	
 	pModelPathInclude = new QStringListModel( this );
 	pUI->listPathInclude->setModel( pModelPathInclude );
@@ -34,19 +40,33 @@ QString ProjectConfigPage::name() const{
 
 
 void ProjectConfigPage::apply(){
-	pConfigGroup.writeEntry( "pathInclude", pModelPathInclude->stringList() );
-	// force reparsing?
+	pSettings.setPathInclude( pModelPathInclude->stringList() );
+	pSettings.setRequireDragenginePackage( pUI->chkRequireDragenginePackage->isChecked() );
+	pSettings.save( *pProject );
+	
+	// force reparsing
+	BackgroundParser &bp = *ICore::self()->languageController()->backgroundParser();
+	
+	const QSet<IndexedString> files( pProject->fileSet() );
+	foreach( const IndexedString &file, files ){
+		if( file.str().endsWith( "*.ds" ) ){
+			bp.addDocument( file, TopDUContext::ForceUpdate );
+		}
+	}
 }
 
 void ProjectConfigPage::defaults(){
 	pUI->editPathInclude->setText( "" );
 	pModelPathInclude->removeRows( 0, pModelPathInclude->rowCount() );
 	
+	pUI->chkRequireDragenginePackage->setChecked( false );
+	
 	emit changed();
 }
 
 void ProjectConfigPage::reset(){
-	pModelPathInclude->setStringList( pConfigGroup.readEntry( "pathInclude", QStringList() ) );
+	pModelPathInclude->setStringList( pSettings.pathInclude() );
+	pUI->chkRequireDragenginePackage->setChecked( pSettings.requireDragenginePackage() );
 	
 	emit changed();
 }
@@ -95,6 +115,9 @@ void ProjectConfigPage::btnPathIncludeRemove(){
 	pModelPathInclude->removeRows( index.row(), 1 );
 	
 	emit changed();
+}
+
+void ProjectConfigPage::chkRequireDragenginePackageChanged(){
 }
 
 }

@@ -106,10 +106,8 @@ void ContextBuilder::startVisiting( AstNode *node ){
 }
 
 void ContextBuilder::preparePackage( ImportPackage &package ){
-// 	TopDUContext * const top = topContext();
-	
 	ImportPackage::State state;
-	package.contexts( state );
+	package.contexts( state, 2 ); // classes and declarations are enough. uses not required
 	if( state.ready ){
 		foreach( TopDUContext *each, state.importContexts ){
 			pTypeFinder->searchContexts() << each;

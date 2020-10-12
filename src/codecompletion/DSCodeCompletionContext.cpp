@@ -52,7 +52,12 @@ pFollowingText( followingText )
 	
 	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document );
 	if( project ){
-		pProjectFiles = project->fileSet();
+		const QSet<IndexedString> files( project->fileSet() );
+		foreach( const IndexedString &file, files ){
+			if( file.str().endsWith( ".ds" ) ){
+				pProjectFiles << file;
+			}
+		}
 	}
 }
 

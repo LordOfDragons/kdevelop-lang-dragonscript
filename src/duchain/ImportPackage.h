@@ -66,7 +66,7 @@ public:
 	 * 
 	 * \note DUChainReadLocker required.
 	 */
-	void contexts( State &state );
+	void contexts( State &state, int minRequiredPhase );
 	
 	/**
 	 * List of all contexts of this package and all dependencies deeply.

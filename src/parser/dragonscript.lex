@@ -197,14 +197,14 @@
 }
 
 	/*** character ***/
-"'"(.|\\(.|h[0-9a-fA-F]{1,2}|[0-7]{1,3}))"'"   { return DragonScript::TokenType::Token_LITERAL_BYTE; }
+"'"([^']|\\(.|h[0-9a-fA-F]{1,2}|[0-7]{1,3}))"'"   { return DragonScript::TokenType::Token_LITERAL_BYTE; }
 
 	/*** other literals ***/
 -?"0b"[01]{1,8}        { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
 -?"0o"[0-7]{1,3}       { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
 -?"0h"[0-9A-Fa-f]{1,8}    { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
 -?[0-9]+           { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
--?"'"(.|\\(.|h[0-9a-fA-F]{1,2}|[0-7]{1,3})){2,4}"'"     { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
+-?"'"([^']|\\(.|h[0-9a-fA-F]{1,2}|[0-7]{1,3})){2,4}"'"     { return DragonScript::TokenType::Token_LITERAL_INTEGER; }
 
 -?[0-9]+(\.[0-9]+|e[+\-]?[0-9]+)   { return DragonScript::TokenType::Token_LITERAL_FLOAT; }
 

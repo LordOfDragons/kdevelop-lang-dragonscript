@@ -70,6 +70,12 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 	Q_UNUSED(self)
 	Q_UNUSED(thread)
 	
+	// for some strange reason KDevelop tries to run this parser on files that do not have
+	// the *.ds extension (for example *.d_s). ignore those files
+	if( ! document().str().endsWith( ".ds" ) ){
+		return;
+	}
+	
 	const QReadLocker parseLock( languageSupport()->parseLock() );
 	pReparsePriority = parsePriority();
 // 	qDebug() << "DSParseJob: RUN phase" << phaseFromFlags(minimumFeatures()) << "priority" << parsePriority() << "for" << document();
@@ -160,7 +166,7 @@ void DSParseJob::run( ThreadWeaver::JobPointer self, ThreadWeaver::Thread *threa
 		
 		highlightDUChain();
 		
-		qDebug() << "DSParseJob.run: finished phase" << pPhase << "for" << document();
+		/* qDebug() << "DSParseJob.run: finished phase" << pPhase << "for" << document(); */
 		
 		if( pPhase < 3 ){
 			if( duChain() ){

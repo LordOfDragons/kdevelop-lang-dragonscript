@@ -15,7 +15,7 @@ using namespace KDevelop;
 namespace DragonScript{
 
 QString DSSessionSettings::defaultPathDSI( "/usr/bin/dsi" );
-QString DSSessionSettings::defaultPathDragengine( "/usr/share/dragengine/modules/scripting/dragonscript" );
+QString DSSessionSettings::defaultPathDragengine( QDir::cleanPath( DESHAREDIR "/modules/scripting/dragonscript" ) );
 
 DSSessionSettings DSSessionSettings::self;
 

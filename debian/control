@@ -1,0 +1,28 @@
+Source: kdevelop-lang-dragonscript
+Section: development
+Priority: optional
+Maintainer: Roland Plüss <roland@rptd.ch>
+Build-Depends: debhelper-compat (= 12), scons
+Standards-Version: 4.1.3
+Homepage: https://dragondreams.ch
+Rules-Requires-Root: no
+
+Package: kdevelop-lang-dragonscript
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: KDevelop DragonScript Scripting Language Plugin
+ Adds DragonScript support to KDevelop. Supports syntax highlighting
+ and code completion.
+ .
+ No extra packages are required for scripts using only the
+ DragonScript language.
+ .
+ For game development using the Drag[en]gine Game Engine the package
+ "libdragengine1" is required since it contains the game engine
+ script classes including native class prototypes. If the package
+ is not installed projects based on the game engine scripts can
+ still be loaded but all the script class information is missing.
+ .
+ To enable game development open the project settings and go to
+ the DragonScript panel. Check the "Requires Drag[en]gine Package"
+ check box and reparse the project.

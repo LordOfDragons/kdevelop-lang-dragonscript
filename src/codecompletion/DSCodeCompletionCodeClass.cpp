@@ -68,7 +68,7 @@ void DSCodeCompletionCodeClass::completionItems(){
 	
 	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations( CursorInRevision::invalid(),
 		*pCompletionContext, {}, pCodeCompletionContext.typeFinder(),
-		*pCodeCompletionContext.rootNamespace(), false ) );
+		*pCodeCompletionContext.rootNamespace(), false ), *pCompletionContext );
 	
 	addOverrideFunctions();
 	

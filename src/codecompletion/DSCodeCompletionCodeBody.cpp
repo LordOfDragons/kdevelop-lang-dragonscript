@@ -195,7 +195,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 			completionPosition, *pCompletionContext,
 			firstWord ? pCodeCompletionContext.searchNamespaces() : QVector<Namespace*>(),
 			pCodeCompletionContext.typeFinder(),
-			*pCodeCompletionContext.rootNamespace().data(), firstWord ) );
+			*pCodeCompletionContext.rootNamespace().data(), firstWord ), *pCompletionContext );
 	}
 	
 	addFunctionCalls();

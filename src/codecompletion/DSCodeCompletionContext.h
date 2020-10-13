@@ -29,8 +29,7 @@ class KDEVDSCODECOMPLETION_EXPORT DSCodeCompletionContext : public CodeCompletio
 public:
 	/** Create code completion context. */
 	DSCodeCompletionContext( DUContextPointer context, const QString& contextText,
-		const QString& followingText, const CursorInRevision& position, int depth,
-		const QUrl &document );
+		const QString& followingText, const CursorInRevision& position, int depth );
 	
 	/**
 	 * Extract the last full expression from the string.
@@ -77,7 +76,7 @@ public:
 	inline const QString &text() const{ return m_text; }
 	
 	/** Document. */
-	inline const QUrl &document() const{ return pDocument; }
+	inline const IndexedString &document() const{ return pDocument; }
 	
 	/** Completion position in document. */
 	inline const CursorInRevision &position() const{ return pPosition; }
@@ -116,9 +115,8 @@ protected:
 	
 	
 private:
-	QUrl pDocument;
+	IndexedString pDocument;
     CursorInRevision pPosition;
-	IndexedString pIndexDocument;
 	ImportPackage::Ref pPackage;
 	QSet<IndexedString> pProjectFiles;
 	

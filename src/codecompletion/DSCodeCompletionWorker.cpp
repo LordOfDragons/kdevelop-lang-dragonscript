@@ -19,12 +19,9 @@ using KTextEditor::View;
 
 namespace DragonScript {
 
-DSCodeCompletionWorker::DSCodeCompletionWorker( DSCodeCompletionModel &model, const QUrl &document ) :
+DSCodeCompletionWorker::DSCodeCompletionWorker( DSCodeCompletionModel &model ) :
 CodeCompletionWorker( &model ),
-pModel( model ),
-pDocument( document )
-{
-	Q_UNUSED( document );
+pModel( model ){
 }
 
 CodeCompletionContext *DSCodeCompletionWorker::createCompletionContext( const DUContextPointer& context,
@@ -33,7 +30,7 @@ const QString& contextText, const QString& followingText, const CursorInRevision
 		return nullptr;
 	}
 	
-	return new DSCodeCompletionContext( context, contextText, followingText, position, 0, pDocument );
+	return new DSCodeCompletionContext( context, contextText, followingText, position, 0 );
 }
 
 void DSCodeCompletionWorker::updateContextRange( Range& contextRange, View* view,

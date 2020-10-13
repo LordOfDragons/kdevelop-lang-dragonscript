@@ -86,12 +86,11 @@ QString DSCodeCompletionModel::filterString( View *view, const Range &range, con
 }
 
 Range DSCodeCompletionModel::completionRange( View *view, const Cursor &position ){
-	pDocument = view->document()->url();
 	return CodeCompletionModelControllerInterface::completionRange( view, position );
 }
 
 KDevelop::CodeCompletionWorker *DSCodeCompletionModel::createCompletionWorker(){
-	return new DSCodeCompletionWorker( *this, pDocument );
+	return new DSCodeCompletionWorker( *this );
 }
 
 }

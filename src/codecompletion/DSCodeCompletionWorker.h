@@ -23,7 +23,7 @@ class KDEVDSCODECOMPLETION_EXPORT DSCodeCompletionWorker : public CodeCompletion
 	Q_OBJECT
 	
 public:
-	DSCodeCompletionWorker( DSCodeCompletionModel &model, const QUrl &document );
+	DSCodeCompletionWorker( DSCodeCompletionModel &model );
 	
 	CodeCompletionContext *createCompletionContext( const DUContextPointer& context,
 		const QString& contextText, const QString& followingText,
@@ -36,7 +36,6 @@ public:
 	
 private:
 	DSCodeCompletionModel &pModel;
-	QUrl pDocument;
 };
 
 }

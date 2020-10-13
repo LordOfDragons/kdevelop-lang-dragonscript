@@ -56,19 +56,19 @@ void DSCodeCompletionCodeClass::completionItems(){
 	}
 	
 	if( ! completionDecl || ! completionType || ! pCompletionContext ){
-		qDebug() << "DSCodeCompletionCodeClass: can not determine completion type";
+// 		qDebug() << "DSCodeCompletionCodeClass: can not determine completion type";
 		pCompletionContext = nullptr;
 		return;
 	}
 	
 	// do completion
-	qDebug() << "DSCodeCompletionCodeClass: completion context" << completionDecl->toString();
+// 	qDebug() << "DSCodeCompletionCodeClass: completion context" << completionDecl->toString();
 	
 	DUChainReadLocker lock;
 	
 	pAllDefinitions = Helpers::consolidate( Helpers::allDeclarations( CursorInRevision::invalid(),
 		*pCompletionContext, {}, pCodeCompletionContext.typeFinder(),
-		*pCodeCompletionContext.rootNamespace().data(), false ) );
+		*pCodeCompletionContext.rootNamespace(), false ) );
 	
 	addOverrideFunctions();
 	

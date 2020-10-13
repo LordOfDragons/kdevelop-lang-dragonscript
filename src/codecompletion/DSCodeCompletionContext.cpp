@@ -33,24 +33,26 @@ using KTextEditor::View;
 
 namespace DragonScript {
 
-DSCodeCompletionContext::DSCodeCompletionContext( DUContextPointer context,
-	const QString& contextText, const QString& followingText,
-	const CursorInRevision& position, int depth, const QUrl &document ) :
+DSCodeCompletionContext::DSCodeCompletionContext( DUContextPointer context, const QString& contextText,
+	const QString& followingText, const CursorInRevision& position, int depth ) :
 CodeCompletionContext( context, contextText /*extractLastExpression( contextText )*/, position, depth ),
 	// extractLastExpression() can not be used because block blocks need to be parsed
 	// and these spawn multiple non-spliced lines
-pDocument( document ),
+pDocument( context->topContext()->url() ),
 pPosition( position ),
-pIndexDocument( document ),
 pFullText( contextText ),
 pFollowingText( followingText )
 {
+	// WARNING other plugins try to store the document QUrl away in the Model or Worker
+	//         implementation but this is unreliable and can result in empty QUrl ending
+	//         up here causing havoc. only the top context url() call is reliable
+	
 // 	qDebug() << "KDevDScript: DSCodeCompletionContext():" << pFullText << m_position
 // 		<< pFollowingText << m_duContext->range();
 	
-	pPackage = DSLanguageSupport::self()->importPackages().packageContaining( pIndexDocument );
+	pPackage = DSLanguageSupport::self()->importPackages().packageContaining( pDocument );
 	
-	IProject * const project = ICore::self()->projectController()->findProjectForUrl( document );
+	IProject * const project = ICore::self()->projectController()->findProjectForUrl( pDocument.toUrl() );
 	if( project ){
 		const QSet<IndexedString> files( project->fileSet() );
 		foreach( const IndexedString &file, files ){
@@ -103,45 +105,45 @@ bool &abort, bool fullCompletion ){
 	switch( context->type() ){
 	case DUContext::ContextType::Global:
 		// global script scope and inside "namespace", "pin" and "requires" definitions
-		qDebug() << "DSCodeCompletionContext context type Global";
+// 		qDebug() << "DSCodeCompletionContext context type Global";
 		break;
 		
 	case DUContext::ContextType::Namespace:
 		// context that declares namespace members
-		qDebug() << "DSCodeCompletionContext context type Namespace";
+// 		qDebug() << "DSCodeCompletionContext context type Namespace";
 		break;
 		
 	case DUContext::ContextType::Class:
 		// inside "class" or "interface" definition
-		qDebug() << "DSCodeCompletionContext context type Class";
+// 		qDebug() << "DSCodeCompletionContext context type Class";
 		DSCodeCompletionCodeClass( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	case DUContext::ContextType::Function:
 		// inside "func" definition
-		qDebug() << "DSCodeCompletionContext context type Function";
+// 		qDebug() << "DSCodeCompletionContext context type Function";
 		DSCodeCompletionCodeBody( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
 	case DUContext::ContextType::Template:
 		// not used
-		qDebug() << "DSCodeCompletionContext context type Template";
+// 		qDebug() << "DSCodeCompletionContext context type Template";
 		break;
 		
 	case DUContext::ContextType::Enum:
 		// inside "enum" definition
-		qDebug() << "DSCodeCompletionContext context type Enum";
+// 		qDebug() << "DSCodeCompletionContext context type Enum";
 		break;
 		
 	case DUContext::ContextType::Helper:
 		// not used
-		qDebug() << "DSCodeCompletionContext context type Helper";
+// 		qDebug() << "DSCodeCompletionContext context type Helper";
 		break;
 		
 	case DUContext::ContextType::Other:
 		// inside code body of functions, blocks, conditionals, loops, switches,
 		// try catching and variable definitions
-		qDebug() << "DSCodeCompletionContext context type Other";
+// 		qDebug() << "DSCodeCompletionContext context type Other";
 		DSCodeCompletionCodeBody( *this, *context, items, abort, fullCompletion ).completionItems();
 		break;
 		
@@ -268,7 +270,7 @@ void DSCodeCompletionContext::prepareTypeFinder(){
 	pTypeFinder.searchContexts() << m_duContext->topContext();
 	
 	foreach( const IndexedString &file, files ){
-		if( file == pIndexDocument ){
+		if( file == pDocument ){
 			continue;
 		}
 		

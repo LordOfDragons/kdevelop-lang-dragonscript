@@ -95,7 +95,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 			parser.rewind( 0 ); // required otherwise parser fails
 			if( ! parser.parseExpression( &ast ) || ! ast
 			|| session.tokenStream()->index() != session.tokenStream()->size() ){
-				qDebug() << "DSCodeCompletionCodeBody: parsing sub expression failed";
+// 				qDebug() << "DSCodeCompletionCodeBody: parsing sub expression failed";
 				return;
 			}
 			/*
@@ -119,7 +119,7 @@ void DSCodeCompletionCodeBody::completionItems(){
 				pCodeCompletionContext.position() );
 			exprvisitor.visitExpression( ast );
 			if( ! exprvisitor.lastType() || ! exprvisitor.lastDeclaration() ){
-				qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
+// 				qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
 				return;
 			}
 			
@@ -156,18 +156,18 @@ void DSCodeCompletionCodeBody::completionItems(){
 		completionPosition = pCodeCompletionContext.position();
 	}
 	
-	qDebug() << "type" << (completionType ? completionType->toString() : "-")
-		<< "decl" << (completionDecl ? completionDecl->toString() : "-")
-		<< "ctx" << (pCompletionContext ? pCompletionContext->scopeIdentifier(true).toString() : "-");
+// 	qDebug() << "type" << (completionType ? completionType->toString() : "-")
+// 		<< "decl" << (completionDecl ? completionDecl->toString() : "-")
+// 		<< "ctx" << (pCompletionContext ? pCompletionContext->scopeIdentifier(true).toString() : "-");
 	
 	if( ! completionDecl || ! completionType || ! pCompletionContext ){
-		qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
+// 		qDebug() << "DSCodeCompletionCodeBody: can not determine completion type";
 		pCompletionContext = nullptr;
 		return;
 	}
 	
 	// do completion
-	qDebug() << "DSCodeCompletionCodeBody: completion context" << completionDecl->toString();
+// 	qDebug() << "DSCodeCompletionCodeBody: completion context" << completionDecl->toString();
 	
 	DUChainReadLocker lock;
 	

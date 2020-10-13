@@ -230,10 +230,14 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 			// from the documentation being parsed
 			ClassDeclaration * const typeObject = typeFinder()->typeObject();
 			if( typeObject ){
-				BaseClassInstance base;
-				base.baseClass = typeObject->abstractType()->indexed();
-				base.access = Declaration::Public;
-				decl->addBaseClass( base );
+				// kdevelop manages to mess this one up any I have no idea how.
+				// if the same context is given do not use it or dead-loops happen
+				if( typeObject != decl ){
+					BaseClassInstance base;
+					base.baseClass = typeObject->abstractType()->indexed();
+					base.access = Declaration::Public;
+					decl->addBaseClass( base );
+				}
 			}
 		}
 		

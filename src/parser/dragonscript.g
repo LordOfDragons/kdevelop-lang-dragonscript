@@ -758,14 +758,6 @@ QString Parser::tokenText( qint64 begin, qint64 end ){
 }
 
 KDevelop::ProblemPointer Parser::reportProblem( Parser::ProblemType type, const QString &message, int offset ){
-	const qint64 index = tokenStream->index() + offset;
-	if( index >= tokenStream->size() ){
-		return {};
-	}
-	
-	const Lexer::Token& toks = tokenStream->curr();
-	const Lexer::Token& toke = tokenStream->at( index );
-	
 	auto p = KDevelop::ProblemPointer( new KDevelop::Problem() );
 	p->setSource( KDevelop::IProblem::Parser );
 	switch( type ){
@@ -788,8 +780,25 @@ KDevelop::ProblemPointer Parser::reportProblem( Parser::ProblemType type, const 
 	}
 	
 	p->setDescription( message );
-	KTextEditor::Range range( toks.line, toks.column, toke.line, toke.column + 1 );
+	
+	int lineBegin = 0, lineEnd = 0, columnBegin = 0, columnEnd = 0;
+	if( tokenStream->size() > 0 ){
+		const qint64 lastValidIndex = qint64( tokenStream->size() - 1 );
+		
+		qint64 index = qMax( qMin( tokenStream->index(), lastValidIndex ), qint64( 0 ) );
+		const Lexer::Token& toks = tokenStream->at( index );
+		lineBegin = toks.line;
+		columnBegin = toks.column;
+		
+		index = qMax( qMin( tokenStream->index() + offset, lastValidIndex ), qint64( 0 ) );
+		const Lexer::Token& toke = tokenStream->at( index );
+		lineEnd = toke.line;
+		columnEnd = toke.column + 1;
+	}
+	
+	KTextEditor::Range range( lineBegin, columnBegin, lineEnd, columnEnd );
 	p->setFinalLocation( KDevelop::DocumentRange( pCurrentDocument, range ) );
+	
 	pProblems << p;
 	return p;
 }

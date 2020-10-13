@@ -1,4 +1,7 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@ --buildsystem=cmake -DDESHAREDIR=/usr/share/games/dragengine
+	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DDESHAREDIR=/usr/share/games/dragengine

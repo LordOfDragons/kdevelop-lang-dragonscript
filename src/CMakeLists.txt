@@ -1,5 +1,9 @@
 cmake_policy(SET CMP0071 NEW)
 
+set(DESHAREDIR "/usr/share/dragengine" CACHE PATH "Drag[en]gine Share Directory")
+
+add_definitions(-DDESHAREDIR="${DESHAREDIR}")
+
 add_subdirectory(parser)
 add_subdirectory(duchain)
 add_subdirectory(codecompletion)

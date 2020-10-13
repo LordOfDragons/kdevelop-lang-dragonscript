@@ -1,6 +1,6 @@
 cmake_policy(SET CMP0071 NEW)
 
-set(DESHAREDIR "/usr/share/dragengine" CACHE PATH "Drag[en]gine Share Directory")
+set(DESHAREDIR "/usr/share/dragengine" CACHE STRING "Drag[en]gine Share Directory")
 
 add_definitions(-DDESHAREDIR="${DESHAREDIR}")
 

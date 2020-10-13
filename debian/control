@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: kdevelop-lang-dragonscript
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, kdevelop
 Description: KDevelop DragonScript Scripting Language Plugin
  Adds DragonScript support to KDevelop. Supports syntax highlighting
  and code completion.

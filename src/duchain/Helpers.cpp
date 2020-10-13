@@ -800,7 +800,15 @@ QVector<Declaration*> Helpers::constructorsInClass( const DUContext &context ){
 	// find declaration in this context without base class or parent chain
 	QList<Declaration*> declarations( context.findLocalDeclarations( pNameConstructor,
 		CursorInRevision::invalid(), nullptr, {}, DUContext::OnlyFunctions ) );
-	return QVector<Declaration*>( declarations.cbegin(), declarations.cend() );
+	
+	// fails on ubuntu... no idea why
+	//return QVector<Declaration*>( declarations.cbegin(), declarations.cend() );
+	
+	QVector<Declaration*> list;
+	foreach( Declaration *each, declarations ){
+		list << each;
+	}
+	return list;
 }
 
 ClassFunctionDeclaration *Helpers::bestMatchingFunction(

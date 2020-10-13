@@ -10,8 +10,8 @@
 	<summary xml:lang="de">DragonScript-Sprachunterstützung für KDevelop</summary>
 	<summary xml:lang="en-GB">DragonScript language support for KDevelop</summary>
 	<summary xml:lang="x-test">xxDragonScript language support for KDevelopxx</summary>
-	<project_license>GPL-2.0+</project_license>
-	<metadata_license>CC0-1.0</metadata_license>
+	<project_license>GPL-3.0+</project_license>
+	<metadata_license>GPL-3.0+</metadata_license>
 	<url type="homepage">https://kdevelop.org</url>
 	<url type="bugtracker">https://bugs.kde.org/enter_bug.cgi?format=guided&amp;product=kdevelop&amp;component=Language Support%3A DragonScript</url>
 	<url type="help">https://docs.kde.org/index.php?application=kdevelop</url>

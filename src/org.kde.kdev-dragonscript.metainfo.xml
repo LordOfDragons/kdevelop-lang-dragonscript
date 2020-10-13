@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+	<component type="addon">
+	<id>org.kde.kdev-dragonscript</id>
+	<extends>org.kde.kdevelop.desktop</extends>
+	<name>KDevelop DragonScript Support</name>
+	<name xml:lang="de">KDevelop – DragonScript-Unterstützung</name>
+	<name xml:lang="en-GB">KDevelop DragonScript Support</name>
+	<name xml:lang="x-test">xxKDevelop DragonScript Supportxx</name>
+	<summary>DragonScript language support for KDevelop</summary>
+	<summary xml:lang="de">DragonScript-Sprachunterstützung für KDevelop</summary>
+	<summary xml:lang="en-GB">DragonScript language support for KDevelop</summary>
+	<summary xml:lang="x-test">xxDragonScript language support for KDevelopxx</summary>
+	<project_license>GPL-2.0+</project_license>
+	<metadata_license>CC0-1.0</metadata_license>
+	<url type="homepage">https://kdevelop.org</url>
+	<url type="bugtracker">https://bugs.kde.org/enter_bug.cgi?format=guided&amp;product=kdevelop&amp;component=Language Support%3A DragonScript</url>
+	<url type="help">https://docs.kde.org/index.php?application=kdevelop</url>
+	<url type="donation">https://www.kde.org/community/donations/?app=kdevelop</url>
+	<project_group>KDE</project_group>
+	<update_contact>kdevelop-devel@kde.org</update_contact>
+</component>

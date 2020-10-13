@@ -1,5 +1,5 @@
 Source: kdevelop-lang-dragonscript
-Section: development
+Section: devel
 Priority: optional
 Maintainer: Roland Plüss <roland@rptd.ch>
 Build-Depends: debhelper-compat (= 12), cmake, extra-cmake-modules, flex, bison, gettext, kdevelop-dev, kdevelop-pg-qt, libkf5itemmodels-dev

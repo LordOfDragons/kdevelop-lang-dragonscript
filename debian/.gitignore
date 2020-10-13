@@ -1,7 +1,6 @@
 .debhelper
 *.substvars
-libdscript*
-dsi
+kdevelop-lang-dragonscript
 *.log
 debhelper-build-stamp
 files

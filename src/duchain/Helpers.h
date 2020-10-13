@@ -233,7 +233,8 @@ public:
 	/**
 	 * Consolidate found declarations removing overridden members.
 	 */
-	static QVector<QPair<Declaration*, int>> consolidate( const QVector<QPair<Declaration*, int>> &list );
+	static QVector<QPair<Declaration*, int>> consolidate(
+		const QVector<QPair<Declaration*, int>> &list, const DUContext &context );
 	
 	/**
 	 * Find all constructor declarations in class.

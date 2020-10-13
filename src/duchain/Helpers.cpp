@@ -752,12 +752,20 @@ QVector<QPair<Declaration*, int>> Helpers::allDeclarationsInBase( const DUContex
 	return declarations;
 }
 
-QVector<QPair<Declaration*, int>> Helpers::consolidate( const QVector<QPair<Declaration*, int>> &list ){
+QVector<QPair<Declaration*, int>> Helpers::consolidate(
+const QVector<QPair<Declaration*, int>> &list, const DUContext &context ){
 	QVector<QPair<Declaration*, int>> result;
 	
 	foreach( auto foundDecl, list ){
 		const TypePtr<FunctionType> foundFunc = foundDecl.first->type<FunctionType>();
 		bool include = true;
+		
+		// constructors work a bit different. only the constructors functions matching
+		// the provided context are kept. base class constructors are all removed
+		if( foundFunc && foundDecl.first->indexedIdentifier() == nameConstructor()
+		&& foundDecl.first->context() != &context ){
+			continue;
+		}
 		
 		QVector<QPair<Declaration*, int>>::iterator iter;
 		for( iter = result.begin(); iter != result.end(); iter++ ){
@@ -767,7 +775,6 @@ QVector<QPair<Declaration*, int>> Helpers::consolidate( const QVector<QPair<Decl
 				break;
 			}
 			
-			// filter out same signature functions keeping those with smaller depth
 			if( foundDecl.first->indexedIdentifier() != iter->first->indexedIdentifier() ){
 				continue;
 			}

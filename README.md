@@ -9,10 +9,10 @@ Shows Declarations, Uses and Class Outlining information
 ![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds1.png)
 
 Supports Code Completion with generating function calls and code block calls.
-![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds4.gif)
+![image2](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds4.gif)
 
 Supports Code Generation for example easily overriding functions.
-![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds2.png)
+![image3](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds2.png)
 
 More features to come in the future.
 

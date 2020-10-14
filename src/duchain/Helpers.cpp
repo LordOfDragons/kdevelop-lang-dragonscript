@@ -378,6 +378,7 @@ Namespace &rootNamespace, bool withGlobal ){
 	const DUContext * const classContext = classDecl ? classDecl->internalContext() : nullptr;
 	const DUContext *searchContext = &context;
 	
+	// up to class scope apply location if present
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
 			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier, location ) );
@@ -388,13 +389,14 @@ Namespace &rootNamespace, bool withGlobal ){
 		}
 	}
 	
+	// up to and including class scope find all declarations
 	while( searchContext ){
-		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
-			break;
-		}
 		const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
 		if( ! declarations.isEmpty() ){
 			return declarations.last();
+		}
+		if( searchContext == classContext ){
+			break;
 		}
 		searchContext = searchContext->parentContext();
 	}
@@ -405,6 +407,21 @@ Namespace &rootNamespace, bool withGlobal ){
 		if( declaration ){
 			return declaration;
 		}
+	}
+	
+	// find declarations up to first namespace scope. here only types are allowed
+	searchContext = classContext->parentContext();
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
+		const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier ) );
+		foreach( Declaration *d, declarations ){
+			if( d->type<StructureType>() ){
+				return d;
+			}
+		}
+		searchContext = searchContext->parentContext();
 	}
 	
 	// find declaration in namespaces. if context declaration is a namespace include context
@@ -510,6 +527,7 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 		searchFlags = ( DUContext::SearchFlag )( searchFlags | DUContext::OnlyFunctions );
 	}
 	
+	// up to class scope apply location if present
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
 			const QList<Declaration*> found( searchContext->findLocalDeclarations(
@@ -521,14 +539,15 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 		}
 	}
 	
+	// up to and including class scope find all declarations
 	while( searchContext ){
-		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
-			break;
-		}
 		const QList<Declaration*> found( searchContext->findLocalDeclarations(
 			identifier, CursorInRevision::invalid(), nullptr, {}, searchFlags ) );
 		foreach( Declaration *d, found ){
 			declarations << d;
+		}
+		if( searchContext == classContext ){
+			break;
 		}
 		searchContext = searchContext->parentContext();
 	}
@@ -537,6 +556,22 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 	if( classContext ){
 		declarations << declarationsForNameInBase( identifier, *classContext,
 			typeFinder, rootNamespace, onlyFunctions );
+	}
+	
+	// find declarations up to first namespace scope. here only types are allowed
+	searchContext = classContext->parentContext();
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
+		const QList<Declaration*> found( searchContext->findLocalDeclarations(
+			identifier, CursorInRevision::invalid(), nullptr, {}, searchFlags ) );
+		foreach( Declaration *d, found ){
+			if( d->type<StructureType>() ){
+				declarations << d;
+			}
+		}
+		searchContext = searchContext->parentContext();
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations
@@ -643,6 +678,7 @@ Namespace &rootNamespace, bool withGlobal ){
 	QVector<QPair<Declaration*, int>> declarations;
 	const DUContext *searchContext = &context;
 	
+	// up to class scope apply location if present
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
 			const QVector<Declaration*> found( searchContext->localDeclarations() );
@@ -655,13 +691,14 @@ Namespace &rootNamespace, bool withGlobal ){
 		}
 	}
 	
+	// up to and including class scope find all declarations
 	while( searchContext ){
-		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
-			break;
-		}
 		const QVector<Declaration*> found( searchContext->localDeclarations() );
 		foreach( Declaration *d, found ){
 			declarations << QPair<Declaration*, int>{ d, 0 };
+		}
+		if( searchContext == classContext ){
+			break;
 		}
 		searchContext = searchContext->parentContext();
 	}
@@ -672,6 +709,21 @@ Namespace &rootNamespace, bool withGlobal ){
 		foreach( auto each, declList ){
 			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
 		}
+	}
+	
+	// find declarations up to first namespace scope. here only types are allowed
+	searchContext = classContext->parentContext();
+	while( searchContext ){
+		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
+			break;
+		}
+		const QVector<Declaration*> found( searchContext->localDeclarations() );
+		foreach( Declaration *d, found ){
+			if( d->type<StructureType>() ){
+				declarations << QPair<Declaration*, int>{ d, 0 };
+			}
+		}
+		searchContext = searchContext->parentContext();
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations

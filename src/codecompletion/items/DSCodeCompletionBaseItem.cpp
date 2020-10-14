@@ -35,8 +35,15 @@ pProperties( CodeCompletionModel::NoProperty )
 {
 	const DUChainPointer<ClassMemberDeclaration> membDecl = declaration.dynamicCast<ClassMemberDeclaration>();
 	const FunctionType::Ptr funcType = declaration->type<FunctionType>();
-	const bool parentIsNamespace = declaration->context() && declaration->context()->owner()
-		&& declaration->context()->owner()->kind() == Declaration::Namespace;
+	const DUContext * const ownerContext = declaration->context();
+	
+	// declaration is global if either:
+	// - parent context is a namespace
+	// - parent content is top context (global namespace)
+	// - parent context is nullptr (safety switch)
+	bool parentIsNamespace = ! ownerContext
+		|| ownerContext->type() == DUContext::Global
+		|| ( ownerContext->owner() && ownerContext->owner()->kind() == Declaration::Namespace );
 	
 	if( funcType ){
 		AbstractType::Ptr returnType = funcType->returnType();
@@ -54,7 +61,7 @@ pProperties( CodeCompletionModel::NoProperty )
 			pIsConstructor = true;
 			
 		}else if( returnType && membDecl && membDecl->isStatic() ){
-			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *declaration->context() );
+			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *ownerContext );
 			if( classDecl && returnType->equals( classDecl->abstractType().data() ) ){
 				pIsConstructor = true;
 			}
@@ -152,7 +159,7 @@ pProperties( CodeCompletionModel::NoProperty )
 			}
 		}
 		
-	}else if( declaration->context() ){
+	}else if( ownerContext ){
 		pAccessType = AccessType::Local;
 		pProperties &= ~( CodeCompletionModel::Protected | CodeCompletionModel::Private );
 		pProperties |= CodeCompletionModel::Public | CodeCompletionModel::LocalScope;

@@ -1,6 +1,21 @@
 # kdevelop-lang-dragonscript
 DragonScript Language Plugin for KDevelop
 
+- Website: https://dragondreams.ch/?page_id=152
+- Source Code Repository: https://github.com/LordOfDragons/kdevelop-lang-dragonscript
+
+# Features
+Shows Declarations, Uses and Class Outlining information
+![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds1.png)
+
+Supports Code Completion with generating function calls and code block calls.
+![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds4.gif)
+
+Supports Code Generation for example easily overriding functions.
+![image1](https://dragondreams.ch/wp-content/uploads/2020/10/kdevlangds2.png)
+
+More features to come in the future.
+
 # Compile
 Required packages (Ubuntu):
 - cmake

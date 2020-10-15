@@ -38,7 +38,7 @@ class TypeFinder{
 public:
 	using ClassDeclarationPointer = DUChainPointer<ClassDeclaration>;
 	
-	// WARNING do NOT use QHash in your live. Never Ever DO IT!!
+	// WARNING do NOT use QMap in your live. Never Ever DO IT!!
 	//         this class sorts keys and uses operator<() instead of operator==().
 	//         TypePtr subclasses QExplicitlySharedDataPointer which does have operator==()
 	//         but not operator<(). compile will find "operator bool" and auto-cast.

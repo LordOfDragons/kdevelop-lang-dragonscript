@@ -113,7 +113,7 @@ void DSCodeCompletionCodeClass::addOverrideFunctions(){
 		if( membDecl->isStatic() ){
 			continue;
 		}
-		if( membDecl->identifier().toString() == "new" ){
+		if( membDecl->indexedIdentifier() == Helpers::nameConstructor() ){
 			continue;
 		}
 		

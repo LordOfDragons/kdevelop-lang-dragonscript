@@ -355,21 +355,19 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
 	ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
-	if( ( pLastModifiers & etmNative ) == etmNative ){
-		// not existing anymore. anyways a special type in dragonscript
-// 		storageSpecifiers |= ClassMemberDeclaration::NativeSpecifier;
-	}
+	/*if( ( pLastModifiers & etmNative ) == etmNative ){
+		// special type in dragonscript which has no extra value to the user if indicated
+		//storageSpecifiers |= ClassMemberDeclaration::ExternSpecifier;
+	}*/
 	if( ( pLastModifiers & etmStatic ) == etmStatic
 	|| decl->indexedIdentifier() == Helpers::nameConstructor() ){
 		storageSpecifiers |= ClassMemberDeclaration::StaticSpecifier;
 	}
-	if( ( pLastModifiers & etmFixed ) == etmFixed ){
-		// not existing anymore
-// 		storageSpecifiers |= ClassMemberDeclaration::FinalSpecifier;
-	}
+	/*if( ( pLastModifiers & etmFixed ) == etmFixed ){
+		// has no effect on functions anyways
+	}*/
 	if( ( pLastModifiers & etmAbstract ) == etmAbstract ){
-		// not existing anymore
-// 		storageSpecifiers |= ClassMemberDeclaration::AbstractSpecifier; // pure virtual ?
+		decl->setIsAbstract( true );
 	}
 	decl->setStorageSpecifiers( storageSpecifiers );
 	

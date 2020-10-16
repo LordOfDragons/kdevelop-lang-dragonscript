@@ -261,6 +261,16 @@ public:
 	static QVector<ClassFunctionDeclaration*> autoCastableFunctions(
 		const QVector<AbstractType::Ptr> &signature, const QVector<Declaration*> &declarations,
 		TypeFinder &typeFinder );
+	
+	/**
+	 * Find function declarations.
+	 * 
+	 * The existing localDeclarations() call seems to pick up variable declarations in child
+	 * "Other" type contexts which breaks code. To solve this the localDeclarations() results
+	 * are filtered for those having the function declaration internal context as parent
+	 * context only.
+	 */
+// 	static QVector<Declaration*> functionArguments( const Declaration* funcDecl );
 };
 
 }

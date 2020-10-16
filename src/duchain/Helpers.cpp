@@ -280,7 +280,7 @@ const QVector<Namespace*> &namespaces, TypeFinder &typeFinder, Namespace &rootNa
 	}
 	
 	// try to find the class identifier in the contexts up to the first namespace context.
-	// this covers the class being an inner class of one of the contexts underneath namespace
+	// this covers the class being an inner class of one of the contexts underneath namespace.
 	DUContext *context = classDecl->internalContext();
 	while( context ){
 		if( context->owner() && context->owner()->kind() == Declaration::Namespace ){
@@ -379,9 +379,13 @@ Namespace &rootNamespace, bool withGlobal ){
 	const DUContext *searchContext = &context;
 	
 	// up to class scope apply location if present
+	// 
+	// NOTE localDeclarations searched in children contexts but not imported contexts as
+	//      required for function call bodies disjoint from their arguments
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
-			const QList<Declaration*> declarations( searchContext->findLocalDeclarations( identifier, location ) );
+			const QList<Declaration*> declarations( searchContext->findDeclarations(
+				identifier, location, nullptr, DUContext::DontSearchInParent ) );
 			if( ! declarations.isEmpty() ){
 				return declarations.last();
 			}
@@ -528,10 +532,13 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 	}
 	
 	// up to class scope apply location if present
+	// 
+	// NOTE localDeclarations searched in children contexts but not imported contexts as
+	//      required for function call bodies disjoint from their arguments
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
-			const QList<Declaration*> found( searchContext->findLocalDeclarations(
-				identifier, location, nullptr, {}, searchFlags ) );
+			const QList<Declaration*> found( searchContext->findDeclarations( identifier, location,
+				nullptr, ( DUContext::SearchFlags )( searchFlags | DUContext::DontSearchInParent ) ) );
 			foreach( Declaration *d, found ){
 				declarations << d;
 			}
@@ -679,12 +686,16 @@ Namespace &rootNamespace, bool withGlobal ){
 	const DUContext *searchContext = &context;
 	
 	// up to class scope apply location if present
+	// 
+	// NOTE localDeclarations() searched in children contexts but not imported contexts as
+	//      required for function call bodies disjoint from their arguments
 	if( location.isValid() ){
 		while( searchContext && searchContext != classContext ){
-			const QVector<Declaration*> found( searchContext->localDeclarations() );
-			foreach( Declaration *d, found ){
-				if( d->range().end < location ){
-					declarations << QPair<Declaration*, int>{ d, 0 };
+			const QVector<QPair<Declaration*, int>> found( searchContext->allDeclarations(
+				CursorInRevision::invalid(), searchContext->topContext(), false ) );
+			foreach( auto d, found ){
+				if( d.first->range().end < location ){
+					declarations << d;
 				}
 			}
 			searchContext = searchContext->parentContext();
@@ -959,5 +970,21 @@ TypeFinder &typeFinder ){
 	
 	return possibleFunctions;
 }
+
+/*
+QVector<Declaration*> Helpers::functionArguments( const Declaration* funcDecl ){
+	const DUContext * const context = funcDecl->internalContext();
+	if( ! context ){
+		return {};
+	}
+	
+	const QVector<Declaration*> localDecls( context->localDeclarations() );
+	QVector<Declaration*> declarations;
+	
+	
+	
+	return declarations;
+}
+*/
 
 }

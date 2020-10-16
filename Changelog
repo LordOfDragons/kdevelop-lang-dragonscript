@@ -6,3 +6,4 @@
 ===
 - Fixed problem with function completion adding more arguments than present
   due to DUChain peculiarities
+- Fixed variable declarations not checking type mismatch of assigned values

@@ -51,6 +51,7 @@ protected:
 	void visitPin( PinAst *node ) override;
 	void visitNamespace( NamespaceAst *node ) override;
 	void visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *node ) override;
+	void visitClassVariablesDeclare( ClassVariablesDeclareAst *node ) override;
 	void visitExpression( ExpressionAst *node ) override;
 	void visitExpressionConstant( ExpressionConstantAst *node ) override;
 	void visitExpressionMember( ExpressionMemberAst *node ) override;

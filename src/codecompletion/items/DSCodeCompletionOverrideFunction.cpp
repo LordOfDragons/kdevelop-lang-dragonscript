@@ -39,7 +39,6 @@ void DSCodeCompletionOverrideFunction::executed( KTextEditor::View *view, const 
 	}
 	
 	KTextEditor::Document &document = *view->document();
-	TopDUContext * const topContext = decl->topContext();
 	const int column = word.end().column();
 	const int line = word.end().line();
 	
@@ -84,16 +83,25 @@ void DSCodeCompletionOverrideFunction::executed( KTextEditor::View *view, const 
 	text += decl->identifier().toString();
 	text += "(";
 	
-	const QVector<QPair<Declaration*, int>> args( contextArguments->allDeclarations(
-		CursorInRevision::invalid(), topContext, false ) );
+	// for some strange reasons this returns sometimes more declarations than function
+	// arguments. it seems the context somehow picks up the code context and finds
+	// variable declarations in there. it is beyond me how this is possible using
+	// localDeclarations(). only work around so far is erasing all declaratins beyond
+	// the function argument count.
+	QVector<Declaration*> args( contextArguments->localDeclarations() );
+	
+	if( funcType && args.size() > funcType->arguments().size() ){
+		args.erase( args.begin() + funcType->arguments().size(), args.end() );
+	}
+	
 	int i;
 	for( i=0; i<args.size(); i++ ){
 		if( i > 0 ){
 			text += ", ";
 		}
-		text += shortTypeName( args[ i ].first->abstractType() );
+		text += shortTypeName( args.at( i )->abstractType() );
 		text += " ";
-		text += args[ i ].first->identifier().toString();
+		text += args.at( i )->identifier().toString();
 	}
 	text += ")";
 	text += "\n";

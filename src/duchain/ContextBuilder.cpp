@@ -213,32 +213,20 @@ void ContextBuilder::openContextEnumeration( EnumerationAst *node ){
 }
 
 void ContextBuilder::openContextClassFunction( ClassFunctionDeclareAst *node ){
-#if 0
+	AstNode * const endNode = node->end ? ( AstNode* )node->end : ( AstNode* )node->begin;
+	
 	if( node->begin->argumentsSequence ){
-		openContext( node->begin->argumentsSequence->front()->element,
-			node->begin->argumentsSequence->back()->element, DUContext::Function );
+		openContext( node->begin->argumentsSequence->front()->element, endNode, DUContext::Function );
 		
 	}else{
-		if( node->begin->name ){
-			const CursorInRevision location( pEditor->findPosition( *node->begin->name ) );
-			openContext( node->begin->name, RangeInRevision( location, location ), DUContext::Function );
-			
-		}else{
-			const CursorInRevision location( pEditor->findPosition( *node->begin->op ) );
-			openContext( node->begin->op, RangeInRevision( location, location ), DUContext::Function );
-		}
+		const CursorInRevision cursorBegin( node->begin->name
+			? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )
+			: pEditor->findPosition( *node->begin->op, EditorIntegrator::BackEdge ) );
+		const CursorInRevision cursorEnd( pEditor->findPosition( *endNode, EditorIntegrator::BackEdge ) );
+		const RangeInRevision range( cursorBegin, cursorEnd );
+		
+		openContext( node, range, DUContext::Function );
 	}
-#endif
-	
-	const CursorInRevision cursorBegin( node->begin->name
-		? pEditor->findPosition( *node->begin->name, EditorIntegrator::BackEdge )
-		: pEditor->findPosition( *node->begin->op, EditorIntegrator::BackEdge ) );
-	const CursorInRevision cursorEnd( node->end
-		? pEditor->findPosition( *node->end, EditorIntegrator::FrontEdge )
-		: pEditor->findPosition( node->begin->endToken, EditorIntegrator::BackEdge ) );
-	const RangeInRevision range( cursorBegin, cursorEnd );
-	
-	openContext( node, range, DUContext::Function ); //, node->begin->name );
 }
 
 void ContextBuilder::openContextInterfaceFunction( InterfaceFunctionDeclareAst *node ){

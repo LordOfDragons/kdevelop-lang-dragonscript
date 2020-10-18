@@ -89,7 +89,7 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 	}
 	
 	const bool hasRightParan = checkText.endsWith( ')' );
-	if( ! hasLeftParan && ! hasRightParan && args.isEmpty() ){
+	if( ( ! hasLeftParan || ! hasRightParan ) && args.isEmpty() ){
 		text += ")";
 	}
 	

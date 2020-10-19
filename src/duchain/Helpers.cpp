@@ -401,15 +401,7 @@ Namespace &rootNamespace, bool withGlobal ){
 		searchContext = searchContext->parentContext();
 	}
 	
-	// find declarations in base contexts
-	if( classContext ){
-		Declaration * const declaration = declarationForNameInBase( identifier, *classContext, typeFinder );
-		if( declaration ){
-			return declaration;
-		}
-	}
-	
-	// find declarations up to first namespace scope. here only types are allowed
+	// find declarations up to but excluding first namespace scope. here only types are allowed
 	searchContext = classContext->parentContext();
 	while( searchContext ){
 		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
@@ -422,6 +414,14 @@ Namespace &rootNamespace, bool withGlobal ){
 			}
 		}
 		searchContext = searchContext->parentContext();
+	}
+	
+	// find declarations in base contexts
+	if( classContext ){
+		Declaration * const declaration = declarationForNameInBase( identifier, *classContext, typeFinder );
+		if( declaration ){
+			return declaration;
+		}
 	}
 	
 	// find declaration in namespaces. if context declaration is a namespace include context
@@ -552,13 +552,7 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 		searchContext = searchContext->parentContext();
 	}
 	
-	// find declarations in base contexts
-	if( classContext ){
-		declarations << declarationsForNameInBase( identifier, *classContext,
-			typeFinder, rootNamespace, onlyFunctions );
-	}
-	
-	// find declarations up to first namespace scope. here only types are allowed
+	// find declarations up to but excluding first namespace scope. here only types are allowed
 	searchContext = classContext->parentContext();
 	while( searchContext ){
 		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
@@ -572,6 +566,12 @@ Namespace &rootNamespace, bool onlyFunctions, bool withGlobal ){
 			}
 		}
 		searchContext = searchContext->parentContext();
+	}
+	
+	// find declarations in base contexts
+	if( classContext ){
+		declarations << declarationsForNameInBase( identifier, *classContext,
+			typeFinder, rootNamespace, onlyFunctions );
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations
@@ -703,15 +703,7 @@ Namespace &rootNamespace, bool withGlobal ){
 		searchContext = searchContext->parentContext();
 	}
 	
-	// find declarations in base contexts
-	if( classContext ){
-		const QVector<QPair<Declaration*, int>> declList( allDeclarationsInBase( *classContext, typeFinder ) );
-		foreach( auto each, declList ){
-			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
-		}
-	}
-	
-	// find declarations up to first namespace scope. here only types are allowed
+	// find declarations up to but excluding first namespace scope. here only types are allowed
 	searchContext = classContext->parentContext();
 	while( searchContext ){
 		if( searchContext->owner() && searchContext->owner()->kind() == Declaration::Namespace ){
@@ -724,6 +716,14 @@ Namespace &rootNamespace, bool withGlobal ){
 			}
 		}
 		searchContext = searchContext->parentContext();
+	}
+	
+	// find declarations in base contexts
+	if( classContext ){
+		const QVector<QPair<Declaration*, int>> declList( allDeclarationsInBase( *classContext, typeFinder ) );
+		foreach( auto each, declList ){
+			declarations << QPair<Declaration*, int>{ each.first, each.second + 1 };
+		}
 	}
 	
 	// find declaration in namespaces. add first classes then namespace declarations

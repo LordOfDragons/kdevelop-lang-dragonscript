@@ -228,6 +228,12 @@ void DSCodeCompletionCodeBody::copyTokens( const TokenStream &in, TokenStream &o
 	if( end < 0 ){
 		end += in.size();
 	}
+	if( start < 0 ){
+		start = 0;
+	}
+	if( end > in.size() - 1 ){
+		end = in.size() - 1;
+	}
 	
 	out.clear();
 	int i;
@@ -287,7 +293,7 @@ int DSCodeCompletionCodeBody::findFirstParseToken( const TokenStream& tokenStrea
 		// though somewhere inside the line then it is an inline if-else. in this case it
 		// is not a statement block and should not reduce countBlocks
 		case TokenType::Token_IF:
-			if( i == 0 || tokenStream.at( i - 1 ).kind == TokenType::Token_LINEBREAK ){
+			if( i < 1 || i > tokenStream.size() || tokenStream.at( i - 1 ).kind == TokenType::Token_LINEBREAK ){
 				// this is a statement block if
 				if( countBlocks-- > 0 ){
 					break;

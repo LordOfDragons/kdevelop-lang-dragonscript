@@ -383,7 +383,7 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	type = exprValue.lastType();
 	}
 	
-	if( declaration ) {
+	if( declaration && node->value != -1 ) {
 		// add a use only for "this" and "super". the rest only updated the expr-context
 		switch( pParseSession.tokenStream()->at( node->value ).kind ){
 		case TokenTypeWrapper::TokenType::Token_THIS:
@@ -833,7 +833,7 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 	}while( iter != end );
 	
 	foreach( ExpressionUnaryOpAst *each, sequence ){
-		if( pParseSession.tokenStream()->at( each->op ).kind == TokenType::Token_LOGICAL_NOT ){
+		if( each->op != -1 && pParseSession.tokenStream()->at( each->op ).kind == TokenType::Token_LOGICAL_NOT ){
 			AbstractType::Ptr typeBool;
 			ClassDeclaration * const declBool = typeFinder()->typeBool();
 			if( declBool ){

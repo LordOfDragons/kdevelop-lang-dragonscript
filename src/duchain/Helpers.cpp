@@ -837,8 +837,34 @@ const QVector<QPair<Declaration*, int>> &list, const DUContext &context ){
 				continue;
 			}
 			
-			if( foundFunc && ! foundFunc->equals( iter->first->abstractType().data() ) ){
-				continue;
+			if( foundFunc ){
+				// unfortunately we can not use FunctionType->equals() since this also
+				// checks the return type. in DS though functions are equal if their
+				// arguments are equal disregarding the return type
+				/*if( ! foundFunc->equals( iter->first->abstractType().data() ) ){
+					continue;
+				}*/
+				const TypePtr<FunctionType> checkFunc = iter->first->type<FunctionType>();
+				if( ! checkFunc ){
+					continue;
+				}
+				
+				const QList<AbstractType::Ptr> args1( foundFunc->arguments() );
+				const QList<AbstractType::Ptr> args2( checkFunc->arguments() );
+				if( args1.size() != args2.size() ){
+					continue;
+				}
+				
+				QList<AbstractType::Ptr>::const_iterator iter1, iter2;
+				for( iter1 = args1.constBegin(), iter2 = args2.constBegin(); iter1 != args1.constEnd(); iter1++, iter2++ ){
+					if( ! iter1->data()->equals( iter2->data() ) ){
+						break;
+					}
+				}
+				
+				if( iter1 != args1.constEnd() ){
+					continue;
+				}
 			}
 			
 			if( foundDecl.second >= iter->second ){

@@ -58,7 +58,7 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 		return;
 	}
 	
-	const DUContext *context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	DUContext *context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	const KDevPG::ListNode<IdentifierAst*> *iter = node->nameSequence->front();
 	const KDevPG::ListNode<IdentifierAst*> *end = iter;
@@ -106,6 +106,18 @@ void UseBuilder::visitFullyQualifiedClassname( FullyQualifiedClassnameAst *node 
 		
 		iter = iter->next;
 	}while( iter != end );
+	
+	if( context && context->owner() ){
+		pCurExprContext = context;
+		pCurExprType = context->owner()->abstractType();
+		
+	}else{
+		pCurExprContext = nullptr;
+		pCurExprType = Helpers::getTypeInvalid();
+	}
+	
+	pCanBeType = true;
+	pAutoThis = false;
 }
 
 void UseBuilder::visitPin( PinAst *node ){
@@ -306,6 +318,43 @@ void UseBuilder::visitClassFunctionDeclareBegin( ClassFunctionDeclareBeginAst *n
 	}
 }
 
+void UseBuilder::visitClassVariablesDeclare( ClassVariablesDeclareAst *node ){
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	const AbstractType::Ptr type( typeOfNode( node->type, context ) );
+	
+	if( ! node->variablesSequence ){
+		return;
+	}
+	
+	const KDevPG::ListNode<ClassVariableDeclareAst*> *iter = node->variablesSequence->front();
+	const KDevPG::ListNode<ClassVariableDeclareAst*> *end = iter;
+	
+	do{
+		if( iter->element->value ){
+			pIgnoreVariable = context->findDeclarationAt(
+				editor()->findPosition( *iter->element->name, EditorIntegrator::FrontEdge ) );
+			visitNode( iter->element );
+			
+			if( iter->element->value ){
+				DUChainReadLocker lock;
+				if( ! Helpers::castable( pCurExprType, type, *typeFinder() ) ){
+					lock.unlock();
+					reportSemanticError( editor()->findRange( *iter->element->value ),
+						i18n( "Cannot assign object of type %1 to %2",
+						pCurExprType ? pCurExprType->toString() : "??", type ? type->toString() : "??" ) );
+				}
+			}
+			
+			pIgnoreVariable = nullptr;
+			
+		}else{
+			visitNode( iter->element );
+		}
+		
+		iter = iter->next;
+	}while( iter != end );
+}
+
 
 
 void UseBuilder::visitExpression( ExpressionAst *node ){
@@ -334,7 +383,7 @@ void UseBuilder::visitExpressionConstant( ExpressionConstantAst *node ){
 	type = exprValue.lastType();
 	}
 	
-	if( declaration ) {
+	if( declaration && node->value != -1 ) {
 		// add a use only for "this" and "super". the rest only updated the expr-context
 		switch( pParseSession.tokenStream()->at( node->value ).kind ){
 		case TokenTypeWrapper::TokenType::Token_THIS:
@@ -784,7 +833,7 @@ void UseBuilder::visitExpressionUnary( ExpressionUnaryAst *node ){
 	}while( iter != end );
 	
 	foreach( ExpressionUnaryOpAst *each, sequence ){
-		if( pParseSession.tokenStream()->at( each->op ).kind == TokenType::Token_LOGICAL_NOT ){
+		if( each->op != -1 && pParseSession.tokenStream()->at( each->op ).kind == TokenType::Token_LOGICAL_NOT ){
 			AbstractType::Ptr typeBool;
 			ClassDeclaration * const declBool = typeFinder()->typeBool();
 			if( declBool ){
@@ -865,7 +914,8 @@ void UseBuilder::visitStatementVariableDefinitions( StatementVariableDefinitions
 	
 // 	UseBuilderBase::visitStatementVariableDefinitions( node );
 	
-	visitNode(node->type);
+	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
+	const AbstractType::Ptr type( typeOfNode( node->type, context ) );
 	
 	if( ! node->variablesSequence ){
 		return;
@@ -873,13 +923,21 @@ void UseBuilder::visitStatementVariableDefinitions( StatementVariableDefinitions
 	
 	const KDevPG::ListNode<StatementVariableDefinitionAst*> *iter = node->variablesSequence->front();
 	const KDevPG::ListNode<StatementVariableDefinitionAst*> *end = iter;
-	DUContext * const context = contextAtOrCurrent( editor()->findPosition( *node ) );
 	
 	do{
 		if( iter->element->value ){
 			pIgnoreVariable = context->findDeclarationAt(
 				editor()->findPosition( *iter->element->name, EditorIntegrator::FrontEdge ) );
 			visitNode( iter->element );
+			
+			DUChainReadLocker lock;
+			if( ! Helpers::castable( pCurExprType, type, *typeFinder() ) ){
+				lock.unlock();
+				reportSemanticError( editor()->findRange( *iter->element->value ),
+					i18n( "Cannot assign object of type %1 to %2",
+					pCurExprType ? pCurExprType->toString() : "??", type ? type->toString() : "??" ) );
+			}
+			
 			pIgnoreVariable = nullptr;
 			
 		}else{

@@ -63,7 +63,6 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 	}
 	
 	KTextEditor::Document &document = *view.document();
-	TopDUContext * const topContext = decl->topContext();
 	const int column = word.end().column();
 	const int line = word.end().line();
 	
@@ -71,24 +70,37 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 	QString text( decl->identifier().toString() );
 	
 	KTextEditor::Range checkSuffix( line, column, line, document.lineLength( line ) );
-	if( ! document.text( checkSuffix ).startsWith( '(' ) ){
+	const QString checkText( document.text( checkSuffix ) );
+	const bool hasLeftParan = checkText.startsWith( '(' );
+	if( ! hasLeftParan ){
 		text += "(";
 	}
 	
-	const QVector<QPair<Declaration*, int>> args( contextArguments->allDeclarations(
-		CursorInRevision::invalid(), topContext, false ) );
-	if( args.isEmpty() ){
+	// for some strange reasons this returns sometimes more declarations than function
+	// arguments. it seems the context somehow picks up the code context and finds
+	// variable declarations in there. it is beyond me how this is possible using
+	// localDeclarations(). only work around so far is erasing all declaratins beyond
+	// the function argument count.
+	QVector<Declaration*> args( contextArguments->localDeclarations() );
+	
+	TypePtr<FunctionType> funcType( decl->type<FunctionType>() );
+	if( funcType && args.size() > funcType->arguments().size() ){
+		args.erase( args.begin() + funcType->arguments().size(), args.end() );
+	}
+	
+	const bool hasRightParan = checkText.endsWith( ')' );
+	if( ( ! hasLeftParan || ! hasRightParan ) && args.isEmpty() ){
 		text += ")";
 	}
 	
 	document.replaceText( word, text );
 	AbstractType::Ptr type( decl->abstractType() );
-	if( ! args.isEmpty() ){
+	if( ! hasLeftParan && ! args.isEmpty() ){
 		view.setCursorPosition( KTextEditor::Cursor( line, column + 1 ) );
 	}
 	
 	// if arguments are present insert them using templating
-	if( ! args.isEmpty() ){
+	if( ! hasLeftParan && ! args.isEmpty() ){
 		bool hasCursorTag = false;
 		bool hasFields = false;
 		text.clear();
@@ -99,7 +111,7 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 				text += ", ";
 			}
 			
-			StructureType::Ptr structType = args[ i ].first->type<StructureType>();
+			StructureType::Ptr structType( args.at( i )->type<StructureType>() );
 			QString argTypeName;
 			if( structType ){
 				argTypeName = structType->qualifiedIdentifier().toString();
@@ -107,15 +119,15 @@ bool DSCodeCompletionItem::completeFunctionCall( KTextEditor::View &view, const 
 			
 			if( argTypeName == "Block" ){
 				text += QString( "block ${arg%1=\"Object %2\"}\n%3\t${cursor}\n%3end" )
-					.arg( i ).arg( args[ i ].first->identifier().toString() )
+					.arg( i ).arg( args.at( i )->identifier().toString() )
 					.arg( lineIndent( view, line ) );
 				hasFields = true;
 				hasCursorTag = true;
 				
 			}else{
 				text += QString( "${arg%1=\"%2 %3\"}" ).arg( i )
-					.arg( tightTypeName(  args[ i ].first->abstractType() ) )
-					.arg( args[ i ].first->identifier().toString() );
+					.arg( tightTypeName( args.at( i )->abstractType() ) )
+					.arg( args.at( i )->identifier().toString() );
 				hasFields = true;
 			}
 		}

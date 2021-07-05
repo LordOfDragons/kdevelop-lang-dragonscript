@@ -355,21 +355,19 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	decl->setAccessPolicy( accessPolicyFromLastModifiers() );
 	
 	ClassMemberDeclaration::StorageSpecifiers storageSpecifiers;
-	if( ( pLastModifiers & etmNative ) == etmNative ){
-		// not existing anymore. anyways a special type in dragonscript
-// 		storageSpecifiers |= ClassMemberDeclaration::NativeSpecifier;
-	}
+	/*if( ( pLastModifiers & etmNative ) == etmNative ){
+		// special type in dragonscript which has no extra value to the user if indicated
+		//storageSpecifiers |= ClassMemberDeclaration::ExternSpecifier;
+	}*/
 	if( ( pLastModifiers & etmStatic ) == etmStatic
 	|| decl->indexedIdentifier() == Helpers::nameConstructor() ){
 		storageSpecifiers |= ClassMemberDeclaration::StaticSpecifier;
 	}
-	if( ( pLastModifiers & etmFixed ) == etmFixed ){
-		// not existing anymore
-// 		storageSpecifiers |= ClassMemberDeclaration::FinalSpecifier;
-	}
+	/*if( ( pLastModifiers & etmFixed ) == etmFixed ){
+		// has no effect on functions anyways
+	}*/
 	if( ( pLastModifiers & etmAbstract ) == etmAbstract ){
-		// not existing anymore
-// 		storageSpecifiers |= ClassMemberDeclaration::AbstractSpecifier; // pure virtual ?
+		decl->setIsAbstract( true );
 	}
 	decl->setStorageSpecifiers( storageSpecifiers );
 	
@@ -394,12 +392,15 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 		}
 	}
 	
-	// this one is strange. it looks as if kdevelop wants two contexts for a function.
-	// the "Function" type context has to contain all arguments while the "Other" type
-	// context has to contain the function body.
+	// we have to separate "Function" from "Other" context otherwise certain functions in
+	// DUChain fail to operate properly. in particular the argument context look up will
+	// catch variable declarations in the code body if not split.
 	// 
-	// but by doing it that way function arguments are not visible. according to other
-	// plugins you have to import the function context to the body context. very complicated
+	// plugins seem to create the function and other context disjoint. doing it this way
+	// function arguments are not visible. according to other plugins you have to import
+	// the function context to the body context. this is not an option since context
+	// lookup is handled manually in Helpers and import contexts are ignored. instead the
+	// other context is nested into the function context
 	openContextClassFunction( node );
 	DUContext * const functionContext = currentContext();
 	decl->setInternalContext( functionContext ); // seems to be required
@@ -443,36 +444,23 @@ void DeclarationBuilder::visitClassFunctionDeclare( ClassFunctionDeclareAst *nod
 	functionContext->setLocalScopeIdentifier( scopeIdentifier );
 	}
 	
-	// kdeveop seems to expect a "Function" type context containing the arguments and a "Other"
-	// type context containing the function body. this requires împorting the function arguments
-	// context into the function body context
-// 	closeContext();
-	
 	// function body
 	if( node->bodySequence ){
 		const KDevPG::ListNode<StatementAst*> *iter = node->bodySequence->front();
 		const KDevPG::ListNode<StatementAst*> *end = iter;
 		
-// 		if( node->begin->super != -1 ){
-// 			openContext( iter->element, RangeInRevision( editor()->findPosition( node->begin->super ),
-// 				editor()->findPosition( *node->bodySequence->back()->element ) ),
-// 				DUContext::Other, scopeIdentifier );
-// 			
-// 		}else{
-// 			openContext( iter->element, node->bodySequence->back()->element,
-// 				DUContext::Other, scopeIdentifier );
-// 		}
-// 		{
-// 		DUChainWriteLocker lock;
-// 		currentContext()->addImportedParentContext( functionContext );
-// 		}
+		openContext( iter->element, node->end ? ( AstNode* )node->end : ( AstNode* )node->begin, DUContext::Other );
+		{
+		DUChainWriteLocker lock;
+		currentContext()->addImportedParentContext( functionContext );
+		}
 		
 		do{
 			visitNode( iter->element );
 			iter = iter->next;
 		}while( iter != end );
 		
-// 		closeContext();
+		closeContext();
 	}
 	
 	closeContext();

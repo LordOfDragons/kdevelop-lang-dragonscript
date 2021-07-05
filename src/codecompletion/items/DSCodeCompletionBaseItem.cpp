@@ -56,18 +56,24 @@ pProperties( CodeCompletionModel::NoProperty )
 		
 		// constructor functions are:
 		// - functions with name "new"
-		// - static functions with return type matching owner class
-		if( declaration->identifier().toString() == "new" ){
+		// 
+		// theoretically also static functions with return type matching owner class can
+		// be considered constructors but there it is unknown which method really does
+		// create a new object instance and those just returning already created instances.
+		// for this reason these methods are not marked constructors to not give false
+		// indications to the user
+		if( declaration->indexedIdentifier() == Helpers::nameConstructor() ){
 			pIsConstructor = true;
-			
+			/*
 		}else if( returnType && membDecl && membDecl->isStatic() ){
 			const ClassDeclaration * const classDecl = Helpers::thisClassDeclFor( *ownerContext );
 			if( classDecl && returnType->equals( classDecl->abstractType().data() ) ){
 				pIsConstructor = true;
 			}
+			*/
 		}
 		
-		if( ! pIsConstructor ){
+		if( ! pIsConstructor && ! pIsStatic ){
 			pIsOperator = operatorNames.contains( declaration->identifier().toString() );
 		}
 		

@@ -151,7 +151,7 @@ bool Helpers::equalsInternal( const AbstractType::Ptr &type, const QualifiedIden
 		return false;
 	}
 	
-	const StructureType::Ptr structType( TypePtr<StructureType>::dynamicCast( type ) );
+	const StructureType::Ptr structType( type.dynamicCast<StructureType>() );
 	if( ! structType ){
 		return false;
 	}
@@ -201,8 +201,8 @@ TypeFinder &typeFinder ){
 	}
 	
 	// check for primitive auto-casting
-	const StructureType::Ptr structType( TypePtr<StructureType>::dynamicCast( type ) );
-	const StructureType::Ptr structTargetType( TypePtr<StructureType>::dynamicCast( targetType ) );
+	const StructureType::Ptr structType( type.dynamicCast<StructureType>() );
+	const StructureType::Ptr structTargetType( type.dynamicCast<StructureType>() );
 	if( ! structType || ! structTargetType ){
 		return false;
 	}

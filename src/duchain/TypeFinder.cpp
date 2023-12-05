@@ -96,7 +96,7 @@ ClassDeclaration *TypeFinder::declarationFor( const AbstractType::Ptr &type ){
 		return iter->data();
 	}
 	
-	const StructureType::Ptr structType( type.cast<StructureType>() );
+	const StructureType::Ptr structType( type.dynamicCast<StructureType>() );
 	if( ! structType ){
 		pTypeMap.insert( type, {} ); // avoid looking up the type again
 		return nullptr;

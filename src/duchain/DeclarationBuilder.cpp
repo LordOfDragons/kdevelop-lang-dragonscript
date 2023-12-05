@@ -218,7 +218,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 			
 			if( exprvisitor.lastType()
 			&& exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-				const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
+				const StructureType::Ptr baseType( exprvisitor.lastType().dynamicCast<StructureType>() );
 				BaseClassInstance base;
 				base.baseClass = baseType->indexed();
 				base.access = Declaration::Public;
@@ -250,7 +250,7 @@ void DeclarationBuilder::visitClass( ClassAst *node ){
 					searchNamespaces(), *typeFinder(), *rootNamespace().data() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
+					const StructureType::Ptr baseType( exprvisitor.lastType().dynamicCast<StructureType>() );
 					BaseClassInstance base;
 					base.baseClass = baseType->indexed();
 					base.access = Declaration::Public;
@@ -501,7 +501,7 @@ void DeclarationBuilder::visitInterface( InterfaceAst *node ){
 					*typeFinder(), *rootNamespace().data() );
 				exprvisitor.visitNode( iter->element );
 				if( exprvisitor.lastType() && exprvisitor.lastType()->whichType() == AbstractType::TypeStructure ){
-					const StructureType::Ptr baseType( exprvisitor.lastType().cast<StructureType>() );
+					const StructureType::Ptr baseType( exprvisitor.lastType().dynamicCast<StructureType>() );
 					BaseClassInstance base;
 					base.baseClass = baseType->indexed();
 					base.access = Declaration::Public;
